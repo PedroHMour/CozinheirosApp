@@ -4,6 +4,7 @@ import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View }
 import { SafeAreaView } from 'react-native-safe-area-context';
 // IMPORTANDO O CONTEXTO (SEGURANÇA)
 import { useSession } from '../../ctx';
+import { API_URL } from '../../src/constants/Config';
 
 export default function ActivityScreen() {
   const router = useRouter();
@@ -11,8 +12,6 @@ export default function ActivityScreen() {
   // Pegamos o usuário do contexto global
   const { user } = useSession();
   
-  // --- ⚠️ SEU IP AQUI ---
-  const API_URL = 'http://192.168.100.89:3000';
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);

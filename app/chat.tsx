@@ -3,14 +3,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  FlatList,
-  KeyboardAvoidingView, Platform,
-  StyleSheet,
-  Text, TextInput, TouchableOpacity,
-  View
+    FlatList,
+    KeyboardAvoidingView, Platform,
+    StyleSheet,
+    Text, TextInput, TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import io from 'socket.io-client';
+import { API_URL } from '../src/constants/Config';
 
 // Interfaces para TypeScript
 interface Message {
@@ -26,8 +27,7 @@ export default function ChatScreen() {
   const params = useLocalSearchParams();
   const requestId = Array.isArray(params.orderId) ? params.orderId[0] : params.orderId;
 
-  // --- ⚠️ SEU IP AQUI ---
-  const API_URL = 'http://192.168.100.89:3000'; 
+ 
   
   const [socket, setSocket] = useState<any>(null);
   const [user, setUser] = useState<any>(null);

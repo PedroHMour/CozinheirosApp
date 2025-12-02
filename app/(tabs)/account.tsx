@@ -2,20 +2,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  FlatList,
-  Image, Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    FlatList,
+    Image, Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSession } from '../../ctx';
+import { API_URL } from '../../src/constants/Config';
 
 // Largura da tela para calcular o tamanho das fotos (Grid de 3 colunas)
 const { width } = Dimensions.get('window');
@@ -25,8 +26,6 @@ export default function AccountScreen() {
   const router = useRouter();
   const { user, signOut } = useSession();
   
-  // --- ⚠️ SEU IP AQUI ---
-  const API_URL = 'http://192.168.100.89:3000';
 
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);

@@ -17,9 +17,9 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MyMap from '../../components/MyMap';
 import { useSession } from '../../ctx';
-
+import MyMap from '../../src/components/MyMap';
+import { API_URL } from '../../src/constants/Config';
 interface Order {
   id: number; client_id: number; cook_id?: number; dish_description: string;
   offer_price: string; status: 'pending' | 'accepted' | 'arrived' | 'cooking' | 'completed';
@@ -30,7 +30,7 @@ export default function DashboardScreen() {
   const router = useRouter();
   const { user, signOut } = useSession();
 
-  const API_URL = 'http://192.168.100.89:3000'; 
+
 
   // --- 1. TODOS OS HOOKS DEVEM FICAR NO TOPO ---
   const [loading, setLoading] = useState(true);
