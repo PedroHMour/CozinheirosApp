@@ -10,13 +10,13 @@ import {
   Text, TextInput, TouchableOpacity,
   View
 } from 'react-native';
-import { useSession } from '../ctx';
 import { API_URL } from '../src/constants/Config'; // Usa a config central
+import { useAuth } from '../src/contexts/AuthContext';
 
 WebBrowser.maybeCompleteAuthSession();
 
 export default function HomeScreen() {
-  const { signIn } = useSession(); 
+  const { signIn } = useAuth(); 
   
   const redirectUri = makeRedirectUri({
     scheme: 'cozinheirosapp'

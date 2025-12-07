@@ -17,9 +17,9 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSession } from '../../ctx';
 import MyMap from '../../src/components/MyMap';
 import { API_URL } from '../../src/constants/Config';
+import { useAuth } from '../../src/contexts/AuthContext';
 interface Order {
   id: number; client_id: number; cook_id?: number; dish_description: string;
   offer_price: string; status: 'pending' | 'accepted' | 'arrived' | 'cooking' | 'completed';
@@ -28,7 +28,7 @@ interface Order {
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { user, signOut } = useSession();
+  const { user, signOut } = useAuth();
 
 
 

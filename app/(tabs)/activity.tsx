@@ -2,29 +2,30 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-// IMPORTANDO O CONTEXTO (SEGURANÇA)
-import { useSession } from '../../ctx';
+
+// 1. CORREÇÃO: Importar do novo local (src/contexts)
+import { useAuth } from '../../src/contexts/AuthContext';
+
+// 2. CORREÇÃO: Importar Config do novo local (src/constants)
 import { API_URL } from '../../src/constants/Config';
 
 export default function ActivityScreen() {
   const router = useRouter();
   
-  // Pegamos o usuário do contexto global
-  const { user } = useSession();
+  // 3. CORREÇÃO: Usar o hook atualizado (useAuth)
+  const { user } = useAuth();
   
-
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Só busca histórico se o usuário existir
     if (user) {
       fetchHistory();
     }
   }, [user]);
 
   const fetchHistory = async () => {
-    if (!user) return; // Proteção extra
+    if (!user) return;
 
     try {
       const response = await fetch(`${API_URL}/requests/history/${user.id}`);
@@ -40,7 +41,7 @@ export default function ActivityScreen() {
     }
   };
 
-  // Se não tiver usuário (está saindo da conta), mostra vazio para não travar
+  // Se não tiver usuário, retorna vazio para não quebrar
   if (!user) return <View style={styles.container} />;
 
   const renderItem = ({ item }: { item: any }) => (
@@ -67,7 +68,6 @@ export default function ActivityScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        {/* Removemos o botão de voltar pois é uma aba */}
         <Text style={styles.title}>Histórico de Pedidos</Text>
       </View>
 

@@ -3,10 +3,13 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { SessionProvider, useSession } from '../ctx';
+
+// CORREÇÃO: Importando do lugar certo com os nomes novos
+import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 
 function InitialLayout() {
-  const { user, isLoading } = useSession();
+  // CORREÇÃO: Usando useAuth em vez de useSession
+  const { user, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -38,10 +41,11 @@ function InitialLayout() {
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <SessionProvider>
+      {/* CORREÇÃO: Usando AuthProvider */}
+      <AuthProvider>
         <StatusBar style="dark" />
         <InitialLayout />
-      </SessionProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }

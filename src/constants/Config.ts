@@ -2,7 +2,7 @@
 
 // Endereço do Backend na Nuvem (Railway)
 // Usamos este para garantir que funcione no 4G e no APK
-export const API_URL = 'https://chefinhouse-api-production.up.railway.app';
+export const API_URL = "https://backend-api-production-29fe.up.railway.app";
 
 // Build Local para Testes:
 //export const API_URL = 'http://192.168.100.89:3000';

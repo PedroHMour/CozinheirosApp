@@ -2,21 +2,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    FlatList,
-    Image, Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  FlatList,
+  Image, Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSession } from '../../ctx';
 import { API_URL } from '../../src/constants/Config';
+import { useAuth } from '../../src/contexts/AuthContext';
 
 // Largura da tela para calcular o tamanho das fotos (Grid de 3 colunas)
 const { width } = Dimensions.get('window');
@@ -24,7 +24,7 @@ const PHOTO_SIZE = width / 3 - 10;
 
 export default function AccountScreen() {
   const router = useRouter();
-  const { user, signOut } = useSession();
+  const { user, signOut } = useAuth();
   
 
   const [loading, setLoading] = useState(true);

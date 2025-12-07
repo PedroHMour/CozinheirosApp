@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "387721210844",
+    "project_id": "local-chefe",
+    "storage_bucket": "local-chefe.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:387721210844:android:b81a908f08396978687d19",
+        "android_client_info": {
+          "package_name": "com.henrique.cozinheirosapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCgsV00wUoOypdr0lfbkx9ojrnMk5h-RrM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
