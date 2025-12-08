@@ -7,12 +7,33 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:387721210844:android:b81a908f08396978687d19",
+        "mobilesdk_app_id": "1:387721210844:android:3329517006b29716687d19",
         "android_client_info": {
-          "package_name": "com.henrique.cozinheirosapp"
+          "package_name": "com.henrique.chefelocal"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "387721210844-h6crq8uhghcsraif4u61tcp2do59ekot.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.henrique.chefelocal",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "387721210844-oabc8bfjgsk8sm58mq88136hlntia338.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.henrique.chefelocal",
+            "certificate_hash": "66c3491ec2c768361c378539ca154da01c8ee6f0"
+          }
+        },
+        {
+          "client_id": "387721210844-v43kneclhqelp9lkre8pmb6ag89r280r.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCgsV00wUoOypdr0lfbkx9ojrnMk5h-RrM"
@@ -20,7 +41,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "387721210844-v43kneclhqelp9lkre8pmb6ag89r280r.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

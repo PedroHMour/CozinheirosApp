@@ -1,19 +1,19 @@
 {
   "expo": {
-    "name": "CozinheirosApp",
-    "slug": "cozinheirosapp",
+    "name": "Chefe Local",
+    "slug": "chefe-local",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "cozinheirosapp",
+    "scheme": "chefe-local",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.henrique.cozinheirosapp"
+      "bundleIdentifier": "com.henrique.chefelocal"
     },
     "android": {
-      "package": "com.henrique.cozinheirosapp",
+      "package": "com.henrique.chefelocal",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
@@ -36,7 +36,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true
@@ -44,7 +45,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "d07975ca-6c22-412a-abe8-e58fa49070ca"
+        "projectId": "a3af317d-d5a1-41cc-a965-09854facbbb6"
       }
     }
   }
