@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View, ActivityIndicator, Text } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 interface MyMapProps {
@@ -21,7 +21,6 @@ export default function MyMap({ region }: MyMapProps) {
     );
   }
 
-  // Criamos um HTML simples que carrega o Leaflet (Mapa Open Source)
   const mapHtml = `
     <!DOCTYPE html>
     <html>
@@ -30,24 +29,26 @@ export default function MyMap({ region }: MyMapProps) {
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>
-          body { margin: 0; padding: 0; }
-          #map { height: 100vh; width: 100vw; }
+          /* Garante que o mapa ocupe 100% do espaço da WebView */
+          body, html { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; }
+          #map { height: 100%; width: 100%; }
         </style>
       </head>
       <body>
         <div id="map"></div>
         <script>
-          // Inicia o mapa centrado na localização do usuário
-          var map = L.map('map', { zoomControl: false }).setView([${region.latitude}, ${region.longitude}], 15);
+          // Inicia o mapa
+          var map = L.map('map', { 
+            zoomControl: false, // Remove botões de zoom para ficar mais limpo
+            attributionControl: false // Remove o rodapé de direitos autorais para ganhar espaço
+          }).setView([${region.latitude}, ${region.longitude}], 15);
           
-          // Adiciona os "azulejos" do OpenStreetMap (Grátis)
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap'
+            maxZoom: 19,
           }).addTo(map);
 
-          // Adiciona um ícone marcador
           L.marker([${region.latitude}, ${region.longitude}]).addTo(map)
-            .bindPopup('Você está aqui!')
+            .bindPopup('<b>Você está aqui</b>')
             .openPopup();
         </script>
       </body>
@@ -59,20 +60,26 @@ export default function MyMap({ region }: MyMapProps) {
       <WebView
         originWhitelist={['*']}
         source={{ html: mapHtml }}
-        style={styles.map}
-        scrollEnabled={false} // Evita conflito de scroll com a página
+        style={styles.webView}
+        // ATENÇÃO: Mudamos para TRUE ou removemos para permitir interação
+        scrollEnabled={true} 
+        // No Android, nestedScrollEnabled ajuda se estiver dentro de outro ScrollView
+        nestedScrollEnabled={true}
       />
+      {/* Camada transparente para capturar toques se necessário, 
+          mas vamos tentar deixar a WebView lidar com isso direto */}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    height: 250,
+    height: 300, // Aumentei um pouco para ficar melhor de mexer
     width: '100%',
     borderRadius: 15,
     overflow: 'hidden',
     marginBottom: 20,
+    marginTop: 10, // Adicionei margem no topo para não colar no header
     elevation: 4,
     backgroundColor: '#FFF',
     borderWidth: 1,
@@ -83,9 +90,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#F0F0F0'
   },
-  map: {
+  webView: {
     flex: 1,
-    width: '100%',
-    height: '100%',
+    backgroundColor: 'transparent'
   }
 });

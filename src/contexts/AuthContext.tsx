@@ -1,64 +1,124 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useEffect, useState } from 'react';
-// 1. Importamos o tipo que acabamos de criar
-import { User } from '../types'; 
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
+import { useRouter, useSegments } from 'expo-router';
 
-// 2. Definimos a "Cara" do nosso Contexto usando o tipo User
-interface AuthContextData {
-  signIn: (userData: User) => void;
-  signOut: () => void;
-  user: User | null;
+// IMPORTS CRÍTICOS
+import { auth } from '../../firebaseConfig'; // Teu arquivo de config
+import { GoogleSignin } from '@react-native-google-signin/google-signin'; // Para deslogar do Google Nativo
+
+type UserData = {
+  id: number;
+  email: string;
+  name: string;
+  type: 'client' | 'cook';
+  token?: string;
+};
+
+type AuthContextType = {
+  user: UserData | null;
   isLoading: boolean;
-}
+  signIn: (userData: UserData) => void;
+  signOut: () => Promise<void>;
+};
 
-const AuthContext = React.createContext<AuthContextData>({
-  signIn: () => null,
-  signOut: () => null,
-  user: null,
-  isLoading: true,
-});
+const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
-export function useAuth() {
-  const value = React.useContext(AuthContext);
-  if (!value) {
-    throw new Error('useAuth deve ser usado dentro de um <AuthProvider />');
-  }
-  return value;
-}
-
-export function AuthProvider(props: React.PropsWithChildren) {
-  // 3. O estado agora sabe que guarda um User ou null
-  const [user, setUser] = useState<User | null>(null);
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<UserData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+  const segments = useSegments();
 
   useEffect(() => {
-    // Carrega o usuário salvo ao abrir o app
-    AsyncStorage.getItem('user').then((json) => {
-      if (json) {
-        try {
-          const userObj = JSON.parse(json);
-          setUser(userObj);
-        } catch (e) {
-          console.error("Erro leitura auth", e);
-        }
-      }
-      setIsLoading(false);
-    });
+    loadStorageData();
   }, []);
 
-  const signIn = async (userData: User) => {
-    setUser(userData);
-    await AsyncStorage.setItem('user', JSON.stringify(userData));
-  };
+  async function loadStorageData() {
+    try {
+      const userStored = await SecureStore.getItemAsync('userData');
+      const tokenStored = await SecureStore.getItemAsync('userToken');
 
-  const signOut = async () => {
-    setUser(null);
-    await AsyncStorage.removeItem('user');
-  };
+      if (userStored && tokenStored) {
+        setUser(JSON.parse(userStored));
+      } else {
+        setUser(null);
+      }
+    } catch (error) {
+      console.log('Erro ao carregar dados:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  // Função chamada pelo app/index.tsx quando o Railway dá OK
+  async function signIn(userData: UserData) {
+    setIsLoading(true);
+    try {
+      setUser(userData);
+      // Salva para não precisar logar toda vez que fecha o app
+      await SecureStore.setItemAsync('userData', JSON.stringify(userData));
+      if (userData.token) {
+        await SecureStore.setItemAsync('userToken', userData.token);
+      }
+      
+      // A navegação automática é feita pelo RootLayout ou index, 
+      // mas podemos forçar aqui se necessário.
+    } catch (error) {
+      console.log('Erro ao salvar login:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  // --- AQUI ESTÁ A CORREÇÃO DO LOGOUT ---
+  async function signOut() {
+    setIsLoading(true);
+    try {
+      // 1. Desconecta do Firebase
+      await auth.signOut();
+
+      // 2. Desconecta do Google Nativo (O SEGREDO PARA TROCAR DE CONTA)
+      try {
+        await GoogleSignin.signOut();
+        // Opcional: revokeAccess() força pedir a senha de novo, mas signOut() costuma bastar para trocar conta
+        // await GoogleSignin.revokeAccess(); 
+      } catch (googleError) {
+        console.log("Aviso: Google SignOut falhou (talvez não estivesse logado via Google):", googleError);
+      }
+
+      // 3. Limpa o armazenamento local
+      await SecureStore.deleteItemAsync('userData');
+      await SecureStore.deleteItemAsync('userToken');
+      
+      // 4. Zera o estado
+      setUser(null);
+
+      // 5. Manda para a tela de login
+      router.replace('/');
+      
+    } catch (error) {
+      console.error('Erro ao sair:', error);
+    } finally {
+      setIsLoading(false); // Destrava a tela de carregamento
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#FF6F00" />
+      </View>
+    );
+  }
 
   return (
-    <AuthContext.Provider value={{ signIn, signOut, user, isLoading }}>
-      {props.children}
+    <AuthContext.Provider value={{ user, isLoading, signIn, signOut }}>
+      {children}
     </AuthContext.Provider>
   );
+}
+
+export function useAuth() {
+  return useContext(AuthContext);
 }

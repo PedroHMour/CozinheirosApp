@@ -1,78 +1,63 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-// 1. CORREÇÃO: Importar do novo local (src/contexts)
-import { useAuth } from '../../src/contexts/AuthContext';
-
-// 2. CORREÇÃO: Importar Config do novo local (src/constants)
 import { API_URL } from '../../src/constants/Config';
+import { Colors, Shadows, Typography } from '../../src/constants/theme';
+import { useAuth } from '../../src/contexts/AuthContext';
 
 export default function ActivityScreen() {
   const router = useRouter();
-  
-  // 3. CORREÇÃO: Usar o hook atualizado (useAuth)
   const { user } = useAuth();
-  
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
-      fetchHistory();
-    }
+    if (user) fetchHistory();
   }, [user]);
 
   const fetchHistory = async () => {
-    if (!user) return;
-
     try {
-      const response = await fetch(`${API_URL}/requests/history/${user.id}`);
+      const response = await fetch(`${API_URL}/requests/history/${user?.id}`);
       const data = await response.json();
-      
-      if (Array.isArray(data)) {
-        setOrders(data);
-      }
-    } catch (error) {
-      console.log("Erro histórico:", error);
-    } finally {
-      setLoading(false);
-    }
+      if (Array.isArray(data)) setOrders(data);
+    } catch (error) { console.log(error); } finally { setLoading(false); }
   };
-
-  // Se não tiver usuário, retorna vazio para não quebrar
-  if (!user) return <View style={styles.container} />;
 
   const renderItem = ({ item }: { item: any }) => (
     <View style={styles.card}>
-      <View style={styles.row}>
-        <Text style={styles.date}>
-          {new Date(item.created_at).toLocaleDateString()}
-        </Text>
-        <Text style={styles.status}>✅ Finalizado</Text>
+      <View style={styles.iconCol}>
+        <View style={styles.iconCircle}>
+          <Ionicons name="checkmark-done" size={20} color={Colors.light.success} />
+        </View>
+        <View style={styles.line} />
       </View>
-      
-      <Text style={styles.dish}>{item.dish_description}</Text>
-      <Text style={styles.price}>R$ {item.offer_price}</Text>
-      
-      <TouchableOpacity 
-        style={styles.btnDetails}
-        onPress={() => router.push({ pathname: '/chat', params: { orderId: item.id } })}
-      >
-        <Text style={styles.btnText}>Ver Conversa Antiga</Text>
-      </TouchableOpacity>
+      <View style={styles.contentCol}>
+        <View style={styles.headerRow}>
+          <Text style={styles.date}>{new Date(item.created_at).toLocaleDateString()}</Text>
+          <Text style={styles.price}>R$ {item.offer_price}</Text>
+        </View>
+        <Text style={styles.dish}>{item.dish_description}</Text>
+        <TouchableOpacity 
+          style={styles.chatLink}
+          onPress={() => router.push({ pathname: '/chat', params: { orderId: item.id } })}
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={16} color={Colors.light.primary} />
+          <Text style={styles.chatLinkText}>Ver conversa</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Histórico de Pedidos</Text>
+        <Text style={Typography.heading1}>Histórico</Text>
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#FF6F00" style={{marginTop: 50}} />
+        <ActivityIndicator size="large" color={Colors.light.primary} style={{marginTop: 50}} />
       ) : (
         <FlatList
           data={orders}
@@ -80,7 +65,10 @@ export default function ActivityScreen() {
           renderItem={renderItem}
           contentContainerStyle={{ padding: 20 }}
           ListEmptyComponent={
-            <Text style={styles.empty}>Nenhum pedido finalizado ainda.</Text>
+            <View style={styles.emptyState}>
+              <Ionicons name="receipt-outline" size={50} color="#DDD" />
+              <Text style={styles.emptyText}>Nenhum pedido finalizado ainda.</Text>
+            </View>
           }
         />
       )}
@@ -89,16 +77,19 @@ export default function ActivityScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F5' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: '#FFF', elevation: 2, borderBottomWidth: 1, borderColor: '#EEE' },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#333' },
-  card: { backgroundColor: '#FFF', padding: 15, borderRadius: 10, marginBottom: 15, elevation: 2 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
-  date: { color: '#999', fontSize: 12 },
-  status: { color: 'green', fontWeight: 'bold', fontSize: 12 },
-  dish: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 5 },
-  price: { fontSize: 16, color: 'green', fontWeight: 'bold' },
-  btnDetails: { marginTop: 10, alignSelf: 'flex-start', paddingVertical: 5 },
-  btnText: { color: '#FF6F00', fontWeight: '600' },
-  empty: { textAlign: 'center', color: '#999', marginTop: 50 }
+  container: { flex: 1, backgroundColor: '#FAFAFA' },
+  header: { padding: 20, backgroundColor: '#FFF', borderBottomWidth: 1, borderColor: '#EEE' },
+  card: { flexDirection: 'row', marginBottom: 5 },
+  iconCol: { alignItems: 'center', width: 40, marginRight: 10 },
+  iconCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#C8E6C9' },
+  line: { width: 2, flex: 1, backgroundColor: '#EEE', marginTop: 5 },
+  contentCol: { flex: 1, backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 20, ...Shadows.small, borderWidth: 1, borderColor: '#F0F0F0' },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
+  date: { fontSize: 12, color: '#999' },
+  price: { fontSize: 14, fontWeight: 'bold', color: Colors.light.success },
+  dish: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 10 },
+  chatLink: { flexDirection: 'row', alignItems: 'center' },
+  chatLinkText: { color: Colors.light.primary, fontSize: 13, marginLeft: 5, fontWeight: '500' },
+  emptyState: { alignItems: 'center', marginTop: 50 },
+  emptyText: { color: '#999', marginTop: 10 }
 });
