@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  FlatList,
   Image,
   Modal,
   ScrollView,
@@ -16,11 +17,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_URL } from '../../src/constants/Config';
-import { Colors, Shadows, Typography } from '../../src/constants/theme';
 import { useAuth } from '../../src/contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
-const PHOTO_SIZE = (width - 40) / 3 - 10; 
+const PHOTO_SIZE = width / 3 - 10; 
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -28,206 +28,251 @@ export default function AccountScreen() {
   
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
+  
   const [portfolio, setPortfolio] = useState<any[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [newImageTitle, setNewImageTitle] = useState('');
   const [newImageUrl, setNewImageUrl] = useState('');
 
-  useEffect(() => {
-    if (user?.id) loadProfile();
-  }, [user]);
-
-  const loadProfile = async () => {
+  // 1. CORREÇÃO: Envolvemos a função em useCallback para o useEffect aceitá-la
+  const loadProfile = useCallback(async () => {
+    if (!user?.id) return;
+    
     try {
-      const resStats = await fetch(`${API_URL}/users/${user?.id}/stats`);
+      const resStats = await fetch(`${API_URL}/users/${user.id}/stats`);
       const jsonStats = await resStats.json();
-      setStats(jsonStats.stats);
+      setStats(jsonStats.stats || {}); 
 
-      if (user?.type === 'cook') {
+      if (user.type === 'cook') {
         const resPort = await fetch(`${API_URL}/portfolio/${user.id}`);
         const jsonPort = await resPort.json();
         if (Array.isArray(jsonPort)) setPortfolio(jsonPort);
       }
-    } catch (error) { console.log(error); } finally { setLoading(false); }
+    } catch (error) {
+      console.log("Erro ao carregar perfil:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  // 2. CORREÇÃO: Agora as dependências estão corretas
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  const handleDeleteAccount = async () => {
+    Alert.alert(
+      "EXCLUIR CONTA ⚠️", 
+      "Tem certeza absoluta? Isso apagará seus dados permanentemente.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        { 
+          text: "SIM, EXCLUIR", 
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              const res = await fetch(`${API_URL}/users/${user?.id}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+              });
+
+              if (res.ok) {
+                Alert.alert("Conta Excluída", "Seus dados foram removidos.");
+                await signOut(); 
+              } else {
+                Alert.alert("Erro", "Não foi possível excluir a conta no servidor.");
+              }
+            } catch (error) {
+              // 3. CORREÇÃO: Agora usamos a variável error (no console) ou removemos ela
+              console.error(error);
+              Alert.alert("Erro", "Falha de conexão.");
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleAddPhoto = async () => {
     if (!newImageUrl) return Alert.alert("Ops", "Cole o link da imagem.");
+    
     try {
       const res = await fetch(`${API_URL}/portfolio`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ chef_id: user?.id, image_url: newImageUrl, title: newImageTitle || "Prato do Chef" })
+        body: JSON.stringify({
+          chef_id: user?.id,
+          image_url: newImageUrl,
+          title: newImageTitle || "Prato do Chef"
+        })
       });
+      
       if (res.ok) {
-        setModalVisible(false); setNewImageUrl(''); setNewImageTitle('');
-        loadProfile();
-        Alert.alert("Sucesso", "Adicionado ao portfólio!");
+        setModalVisible(false);
+        setNewImageUrl('');
+        setNewImageTitle('');
+        loadProfile(); 
+        Alert.alert("Sucesso", "Prato adicionado ao portfólio!");
       }
-    } catch (error) { Alert.alert("Erro", "Falha ao salvar."); }
-  };
-
-  const handleDeletePhoto = async (id: number) => {
-    Alert.alert("Excluir", "Remover esta foto?", [
-      { text: "Cancelar" },
-      { text: "Excluir", style: 'destructive', onPress: async () => {
-          await fetch(`${API_URL}/portfolio/${id}`, { method: 'DELETE' });
-          loadProfile();
-        }}
-    ]);
+    } catch (error) {
+      // Usando error para satisfazer o linter
+      console.log(error);
+      Alert.alert("Erro", "Falha ao salvar foto.");
+    }
   };
 
   const handleLogout = () => {
     Alert.alert("Sair", "Tem certeza?", [
       { text: "Cancelar" },
-      { text: "Sair", style: 'destructive', onPress: () => signOut() }
+      { text: "Sair", onPress: () => signOut() }
     ]);
   };
 
-  if (loading || !user) return <ActivityIndicator size="large" color={Colors.light.primary} style={{flex:1}} />;
+  if (loading || !user) return <ActivityIndicator size="large" color="#FF6F00" style={{flex:1}} />;
 
+  const initial = user.name ? user.name.charAt(0).toUpperCase() : '?';
   const isCook = user.type === 'cook';
+
+  const renderPhoto = ({ item }: { item: any }) => (
+    <TouchableOpacity style={styles.photoContainer}>
+      <Image source={{ uri: item.image_url }} style={styles.photo} />
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
         
-        {/* Cabeçalho de Perfil */}
-        <View style={styles.profileHeader}>
-          <View style={styles.avatarContainer}>
-            <Text style={styles.avatarText}>{user.name.charAt(0).toUpperCase()}</Text>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Minha Conta</Text>
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initial}</Text>
           </View>
-          <View style={styles.profileInfo}>
-            <Text style={Typography.heading2}>{user.name}</Text>
-            <Text style={styles.email}>{user.email}</Text>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{isCook ? 'Chef de Cozinha' : 'Cliente Vip'}</Text>
-            </View>
+          <Text style={styles.name}>{user.name}</Text>
+          <Text style={styles.email}>{user.email}</Text>
+          <View style={styles.tag}>
+            <Text style={styles.tagText}>{isCook ? '👨‍🍳 Chef de Cozinha' : '🧑‍💼 Cliente'}</Text>
           </View>
         </View>
 
-        {/* Estatísticas */}
         {stats && (
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>
-                {isCook ? `R$ ${parseFloat(stats.total_earnings || 0).toFixed(0)}` : stats.completed_orders}
-              </Text>
+          <View style={styles.statsRow}>
+            <View style={styles.statBox}>
               <Text style={styles.statLabel}>{isCook ? 'Ganhos' : 'Pedidos'}</Text>
+              <Text style={[styles.statValue, {color: 'green'}]}>
+                {isCook ? `R$ ${parseFloat(stats.total_earnings || 0).toFixed(2)}` : stats.completed_orders || 0}
+              </Text>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{stats.completed_orders || 0}</Text>
+            <View style={styles.statBox}>
               <Text style={styles.statLabel}>Serviços</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>5.0</Text>
-              <Text style={styles.statLabel}>Avaliação</Text>
+              <Text style={styles.statValue}>{stats.completed_orders || 0}</Text>
             </View>
           </View>
         )}
 
-        {/* Portfólio (Grid de Fotos) */}
         {isCook && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={Typography.heading3}>Meu Portfólio</Text>
+          <View style={styles.portfolioSection}>
+            <View style={styles.portfolioHeader}>
+              <Text style={styles.sectionTitle}>Meu Portfólio 📸</Text>
               <TouchableOpacity onPress={() => setModalVisible(true)}>
-                <Text style={styles.addText}>+ Adicionar</Text>
+                <Text style={styles.btnAdd}>+ Adicionar</Text>
               </TouchableOpacity>
             </View>
-            
+
             {portfolio.length === 0 ? (
-              <View style={styles.emptyPortfolio}>
-                <Ionicons name="images-outline" size={40} color="#DDD" />
-                <Text style={styles.emptyText}>Adicione fotos dos seus pratos</Text>
-              </View>
+              <Text style={styles.emptyText}>Nenhuma foto. Adicione seus melhores pratos!</Text>
             ) : (
-              <View style={styles.grid}>
-                {portfolio.map((item) => (
-                  <TouchableOpacity key={item.id} onLongPress={() => handleDeletePhoto(item.id)} style={styles.photoWrapper}>
-                    <Image source={{ uri: item.image_url }} style={styles.photo} />
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <FlatList
+                data={portfolio}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={renderPhoto}
+                numColumns={3}
+                scrollEnabled={false}
+                columnWrapperStyle={{ gap: 10 }}
+                contentContainerStyle={{ gap: 10 }}
+              />
             )}
           </View>
         )}
 
-        {/* Menu de Ações */}
-        <View style={styles.menuSection}>
+        <View style={styles.menu}>
           <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/(tabs)/activity')}>
-            <View style={[styles.iconBox, {backgroundColor: '#E3F2FD'}]}>
-              <Ionicons name="time" size={20} color="#2196F3" />
-            </View>
-            <Text style={styles.menuText}>Histórico de Atividades</Text>
+            <Ionicons name="time-outline" size={24} color="#666" />
+            <Text style={styles.menuText}>Histórico</Text>
             <Ionicons name="chevron-forward" size={20} color="#CCC" />
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
-            <View style={[styles.iconBox, {backgroundColor: '#FFEBEE'}]}>
-              <Ionicons name="log-out" size={20} color="#F44336" />
-            </View>
-            <Text style={[styles.menuText, {color: '#F44336'}]}>Sair da Conta</Text>
+            <Ionicons name="log-out-outline" size={24} color="#333" />
+            <Text style={styles.menuText}>Sair da Conta</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.menuItem, { borderBottomWidth: 0 }]} onPress={handleDeleteAccount}>
+            <Ionicons name="trash-outline" size={24} color="red" />
+            <Text style={[styles.menuText, {color:'red', fontWeight:'bold'}]}>Excluir Minha Conta</Text>
           </TouchableOpacity>
         </View>
 
       </ScrollView>
 
-      {/* Modal Adicionar Foto */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={Typography.heading3}>Novo Prato</Text>
-            <TextInput style={styles.input} placeholder="Nome do Prato" value={newImageTitle} onChangeText={setNewImageTitle} />
-            <TextInput style={styles.input} placeholder="URL da Imagem (https://...)" value={newImageUrl} onChangeText={setNewImageUrl} autoCapitalize="none"/>
-            <TouchableOpacity style={styles.saveBtn} onPress={handleAddPhoto}>
-              <Text style={styles.btnText}>Salvar Foto</Text>
+            <Text style={styles.modalTitle}>Adicionar Prato</Text>
+            <Text style={styles.label}>Título</Text>
+            <TextInput style={styles.input} placeholder="Ex: Risoto" value={newImageTitle} onChangeText={setNewImageTitle} />
+            <Text style={styles.label}>Link da Imagem</Text>
+            <TextInput style={styles.input} placeholder="https://..." value={newImageUrl} onChangeText={setNewImageUrl} autoCapitalize="none"/>
+            <TouchableOpacity style={styles.btnConfirm} onPress={handleAddPhoto}>
+              <Text style={styles.btnText}>Salvar</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setModalVisible(false)} style={{marginTop:15}}>
-              <Text style={{color: Colors.light.error}}>Cancelar</Text>
+              <Text style={{color:'red', textAlign:'center'}}>Cancelar</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FAFAFA' },
-  profileHeader: { padding: 25, flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderBottomWidth: 1, borderColor: '#F0F0F0' },
-  avatarContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: Colors.light.primary, justifyContent: 'center', alignItems: 'center', marginRight: 20, ...Shadows.medium },
-  avatarText: { fontSize: 32, color: '#FFF', fontWeight: 'bold' },
-  profileInfo: { flex: 1 },
-  email: { color: Colors.light.textSecondary, marginTop: 4, marginBottom: 8 },
-  badge: { backgroundColor: Colors.light.primaryLight, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start' },
-  badgeText: { color: Colors.light.primary, fontSize: 12, fontWeight: 'bold' },
-  
-  statsContainer: { flexDirection: 'row', backgroundColor: '#FFF', margin: 20, borderRadius: 15, padding: 20, justifyContent: 'space-around', ...Shadows.small },
-  statItem: { alignItems: 'center' },
-  statNumber: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-  statLabel: { fontSize: 12, color: '#999', marginTop: 4 },
-  statDivider: { width: 1, height: '100%', backgroundColor: '#EEE' },
-
-  section: { paddingHorizontal: 20, marginBottom: 20 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  addText: { color: Colors.light.primary, fontWeight: 'bold' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  photoWrapper: { width: PHOTO_SIZE, height: PHOTO_SIZE, borderRadius: 12, overflow: 'hidden' },
+  container: { flex: 1, backgroundColor: '#F5F5F5' },
+  header: { padding: 20, backgroundColor: '#FFF', borderBottomWidth:1, borderColor:'#EEE' },
+  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#333' },
+  card: { alignItems: 'center', backgroundColor: '#FFF', padding: 20, marginBottom: 15, marginTop: 15 },
+  avatar: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#FF6F00', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+  avatarText: { fontSize: 28, color: '#FFF', fontWeight: 'bold' },
+  name: { fontSize: 20, fontWeight: 'bold', color: '#333' },
+  email: { color: '#666', marginBottom: 5 },
+  tag: { backgroundColor: '#FFF3E0', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+  tagText: { color: '#FF6F00', fontSize: 12, fontWeight: 'bold' },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-evenly', padding: 20, backgroundColor: '#FFF', marginBottom: 15, marginHorizontal: 15, borderRadius: 10, elevation: 2 },
+  statBox: { alignItems: 'center' },
+  statLabel: { color: '#999', fontSize: 12, marginBottom: 5 },
+  statValue: { fontSize: 20, fontWeight: 'bold', color: '#333' },
+  portfolioSection: { padding: 15, backgroundColor: '#FFF', marginBottom: 15 },
+  portfolioHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  btnAdd: { color: '#FF6F00', fontWeight: 'bold', fontSize: 16 },
+  emptyText: { color: '#999', fontStyle: 'italic', textAlign: 'center', padding: 20 },
+  photoContainer: { width: PHOTO_SIZE, height: PHOTO_SIZE, borderRadius: 8, overflow: 'hidden', backgroundColor: '#EEE' },
   photo: { width: '100%', height: '100%' },
-  emptyPortfolio: { padding: 30, alignItems: 'center', backgroundColor: '#FFF', borderRadius: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: '#DDD' },
-  emptyText: { marginTop: 10, color: '#999' },
-
-  menuSection: { paddingHorizontal: 20 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 10, ...Shadows.small },
-  iconBox: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
-  menuText: { flex: 1, fontSize: 16, fontWeight: '500', color: '#333' },
-
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#FFF', padding: 25, borderRadius: 20, alignItems: 'center' },
-  input: { width: '100%', backgroundColor: '#F5F5F5', padding: 15, borderRadius: 12, marginTop: 15 },
-  saveBtn: { width: '100%', backgroundColor: Colors.light.primary, padding: 15, borderRadius: 12, marginTop: 20, alignItems: 'center' },
-  btnText: { color: '#FFF', fontWeight: 'bold' }
+  menu: { backgroundColor: '#FFF', paddingHorizontal: 20, marginTop: 10, marginBottom: 30 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1, borderColor: '#F0F0F0' },
+  menuText: { flex: 1, marginLeft: 15, fontSize: 16, color: '#333' },
+  modalOverlay: { flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'center', padding: 20 },
+  modalContent: { backgroundColor:'#FFF', padding:20, borderRadius:15 },
+  modalTitle: { fontSize:20, fontWeight:'bold', marginBottom:15, textAlign:'center' },
+  input: { backgroundColor:'#F0F0F0', padding:12, borderRadius:8, marginBottom:10 },
+  label: { fontWeight: 'bold', color:'#333', marginBottom:5 },
+  btnConfirm: { backgroundColor:'#FF6F00', padding:15, borderRadius:10, alignItems:'center' },
+  btnText: { color:'#FFF', fontWeight:'bold' }
 });

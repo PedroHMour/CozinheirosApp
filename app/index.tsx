@@ -3,7 +3,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   Image,
   KeyboardAvoidingView,
   LayoutAnimation,
@@ -15,13 +14,14 @@ import {
   TextInput,
   TouchableOpacity,
   UIManager,
-  View
+  View,
+  Dimensions
 } from 'react-native';
 
-// --- BIBLIOTECA NATIVA DO GOOGLE ---
+// NATIVO GOOGLE
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 
-// --- IMPORTS DO FIREBASE ---
+// FIREBASE
 import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
@@ -31,11 +31,10 @@ import {
 } from 'firebase/auth';
 import { auth } from '../firebaseConfig';
 
-// --- ROTEAMENTO E CONTEXTO ---
+// ROTEAMENTO
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/contexts/AuthContext';
 
-// Habilita animações no Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
@@ -43,15 +42,16 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 const API_URL = 'https://backend-api-production-29fe.up.railway.app';
 const { width } = Dimensions.get('window');
 
+// Garanta que esta imagem existe em assets/images/logo.png
+const logoImg = require('../assets/images/logo.png');
+
 export default function HomeScreen() {
   const router = useRouter();
   const { signIn } = useAuth();
 
-  // Estado para alternar entre Login (Entrar) e Register (Cadastrar)
   const [isRegistering, setIsRegistering] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
-  // Form Data
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -65,7 +65,6 @@ export default function HomeScreen() {
     });
   }, []);
 
-  // --- LÓGICA DE BACKEND (INTACTA) ---
   const syncUserWithBackend = async (user: User, type: string, nome?: string) => {
     try {
       console.log("🔄 [RAILWAY] Iniciando sincronia...");
@@ -94,11 +93,17 @@ export default function HomeScreen() {
       if (res.ok) {
         console.log("✅ [RAILWAY] Sucesso!");
         if (signIn) signIn(data.user);
-        router.replace('/(tabs)'); 
+        
+        // --- CORREÇÃO DE ROTA AQUI ---
+        // Simplificado para apenas '/(tabs)'. O Expo Router acha o index sozinho.
+        // O 'as any' evita briga com o TypeScript se as rotas não estiverem geradas ainda.
+        router.replace('/(tabs)' as any); 
+
       } else {
         Alert.alert("Atenção", `Erro no servidor: ${data.error || 'Tente novamente.'}`);
       }
     } catch (error) {
+      console.error(error);
       Alert.alert("Erro", "Falha de conexão com o servidor.");
     }
   };
@@ -114,7 +119,6 @@ export default function HomeScreen() {
       const credential = GoogleAuthProvider.credential(idToken);
       const userCredential = await signInWithCredential(auth, credential);
       
-      // Se for Google, assumimos Cliente por padrão, ou podemos perguntar depois
       await syncUserWithBackend(userCredential.user, 'client');
     } catch (error: any) {
       if (error.code !== statusCodes.SIGN_IN_CANCELLED) {
@@ -133,14 +137,13 @@ export default function HomeScreen() {
     try {
       let userCred;
       if (!isRegistering) {
-        // LOGIN
         userCred = await signInWithEmailAndPassword(auth, email, password);
       } else {
-        // CADASTRO
         userCred = await createUserWithEmailAndPassword(auth, email, password);
       }
       await syncUserWithBackend(userCred.user, userType, name);
     } catch (error: any) {
+      console.log(error);
       let msg = "Ocorreu um erro.";
       if (error.code === 'auth/invalid-credential') msg = "E-mail ou senha incorretos.";
       if (error.code === 'auth/email-already-in-use') msg = "Este e-mail já está cadastrado.";
@@ -162,21 +165,21 @@ export default function HomeScreen() {
       
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
-        {/* 1. CABEÇALHO LIMPO */}
+        {/* CABEÇALHO */}
         <View style={styles.header}>
-          <View style={styles.logoCircle}>
-            <Ionicons name="restaurant" size={40} color="#FFF" />
-          </View>
-          <Text style={styles.appTitle}>Chefe Local</Text>
+          <Image 
+            source={logoImg} 
+            style={styles.logo} 
+            resizeMode="contain" 
+          />
           <Text style={styles.appSubtitle}>
-            {isRegistering ? 'Crie sua conta e comece agora' : 'Bem-vindo de volta!'}
+            {isRegistering ? 'Crie sua conta e comece agora' : 'Alta gastronomia na sua casa'}
           </Text>
         </View>
 
-        {/* 2. CARD DO FORMULÁRIO */}
+        {/* CARD DO FORMULÁRIO */}
         <View style={styles.formCard}>
           
-          {/* BOTÃO GOOGLE */}
           <TouchableOpacity style={styles.googleBtn} onPress={handleGoogleLogin} disabled={isLoading}>
             {isLoading && !email ? (
                <ActivityIndicator color="#333" />
@@ -194,7 +197,6 @@ export default function HomeScreen() {
             <View style={styles.line} />
           </View>
 
-          {/* SELETOR DE TIPO (SÓ NO CADASTRO) */}
           {isRegistering && (
             <View style={styles.typeSelector}>
               <TouchableOpacity 
@@ -212,7 +214,6 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {/* INPUTS */}
           <View style={styles.inputsContainer}>
             {isRegistering && (
               <View style={styles.inputWrapper}>
@@ -256,7 +257,6 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* BOTÃO DE AÇÃO PRINCIPAL */}
           <TouchableOpacity style={styles.primaryBtn} onPress={handleManualAction} disabled={isLoading}>
             {isLoading && email ? (
               <ActivityIndicator color="#FFF" />
@@ -269,7 +269,6 @@ export default function HomeScreen() {
 
         </View>
 
-        {/* 3. RODAPÉ (TROCAR MODO) */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
             {isRegistering ? 'Já tem uma conta?' : 'Ainda não tem conta?'}
@@ -290,15 +289,12 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   scrollContent: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   
-  header: { alignItems: 'center', marginBottom: 30 },
-  logoCircle: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: '#FF6F00',
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: 15,
-    elevation: 8, shadowColor: '#FF6F00', shadowOpacity: 0.3, shadowRadius: 10
+  header: { alignItems: 'center', marginBottom: 20 },
+  logo: {
+    width: width * 0.6, 
+    height: 100,
+    marginBottom: 10
   },
-  appTitle: { fontSize: 28, fontWeight: 'bold', color: '#1A1A1A', marginBottom: 5 },
   appSubtitle: { fontSize: 16, color: '#666', textAlign: 'center' },
 
   formCard: { width: '100%' },
