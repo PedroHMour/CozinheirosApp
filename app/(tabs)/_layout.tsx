@@ -1,11 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import React from 'react';
-// Importação nova para calcular a área segura
+import { Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
-  // Pega as medidas exatas da tela do usuário
   const insets = useSafeAreaInsets();
 
   return (
@@ -14,48 +12,48 @@ export default function TabLayout() {
       tabBarActiveTintColor: '#FF6F00',
       tabBarInactiveTintColor: '#999',
       tabBarStyle: { 
-        // A altura será: 60px padrão + a altura dos botões do Android (insets.bottom)
-        height: 60 + insets.bottom, 
-        // O espaçamento interno empurra os ícones para cima dos botões
+        height: Platform.OS === 'ios' ? 80 : 60 + insets.bottom, 
         paddingBottom: insets.bottom + 5, 
         paddingTop: 10,
         backgroundColor: '#FFF',
         borderTopWidth: 1,
         borderColor: '#EEE',
-        elevation: 10
       },
-      tabBarLabelStyle: {
-        fontSize: 12,
-        fontWeight: '600',
-        marginBottom: 5
-      }
+      tabBarLabelStyle: { fontSize: 12, fontWeight: '600', marginBottom: 5 }
     }}>
+      {/* 1. O NOME AQUI DEVE SER "index" (pois o arquivo é index.tsx) */}
       <Tabs.Screen
         name="index"
         options={{
           title: 'Início',
-          tabBarIcon: ({ color, size }) => <Ionicons name="home" size={24} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="home" size={24} color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="options"
-        options={{
-          title: 'Opções',
-          tabBarIcon: ({ color, size }) => <Ionicons name="grid" size={24} color={color} />,
-        }}
-      />
+
+      {/* 2. ATIVIDADE */}
       <Tabs.Screen
         name="activity"
         options={{
           title: 'Atividade',
-          tabBarIcon: ({ color, size }) => <Ionicons name="document-text" size={24} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="list" size={24} color={color} />,
         }}
       />
+
+      {/* 3. OPÇÕES */}
+      <Tabs.Screen
+        name="options"
+        options={{
+          title: 'Opções',
+          tabBarIcon: ({ color }) => <Ionicons name="grid-outline" size={24} color={color} />,
+        }}
+      />
+
+      {/* 4. CONTA */}
       <Tabs.Screen
         name="account"
         options={{
           title: 'Conta',
-          tabBarIcon: ({ color, size }) => <Ionicons name="person" size={24} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="person" size={24} color={color} />,
         }}
       />
     </Tabs>

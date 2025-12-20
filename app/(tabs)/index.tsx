@@ -1,15 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
   RefreshControl,
+  SafeAreaView,
   StatusBar,
   StyleSheet,
   Text,
@@ -17,13 +19,14 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-
-import MyMap from '../../src/components/MyMap';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { API_URL } from '../../src/constants/Config';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { api } from '../../src/services/api';
 
-// Tipagem rigorosa para evitar erros
+const { width, height } = Dimensions.get('window');
+
+// Tipagem
 interface Order {
   id: number; 
   client_id: number; 
@@ -36,27 +39,43 @@ interface Order {
   created_at?: string;
 }
 
+interface Chef {
+  id: number;
+  name: string;
+  latitude: number;
+  longitude: number;
+  gender?: string;
+  is_premium?: boolean;
+}
+
 export default function DashboardScreen() {
   const router = useRouter();
   const { user, signOut } = useAuth();
 
-  // --- ESTADOS GERAIS ---
   const [loading, setLoading] = useState(true);
   const [region, setRegion] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [chefs, setChefs] = useState<Chef[]>([]);
 
-  // --- ESTADOS DO CLIENTE ---
+  // Pedidos
   const [modalVisible, setModalVisible] = useState(false);
   const [dish, setDish] = useState('');
   const [price, setPrice] = useState('');
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [myAcceptedOrders, setMyAcceptedOrders] = useState<Order[]>([]); 
 
-  // --- ESTADOS DO CHEF ---
-  const [orders, setOrders] = useState<Order[]>([]); // Pedidos disponíveis na região
-  const [myAcceptedOrders, setMyAcceptedOrders] = useState<Order[]>([]); // Pedidos que eu aceitei
+  // --- BUSCA DE DADOS ---
+  const fetchChefs = useCallback(async () => {
+    try {
+        const res = await api.get('/chefs');
+        if(Array.isArray(res)) setChefs(res);
+    } catch { 
+        // Silencioso em produção para não travar
+    }
+  }, []);
 
-  // 1. Carregar Localização
-  const loadLocation = async () => {
+  const loadLocationAndData = useCallback(async () => {
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
@@ -64,80 +83,99 @@ export default function DashboardScreen() {
         setRegion({
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
-          latitudeDelta: 0.005, longitudeDelta: 0.005,
+          latitudeDelta: 0.015, 
+          longitudeDelta: 0.015,
         });
+
+        if (user) {
+            api.post('/users/location', {
+                id: user.id,
+                latitude: loc.coords.latitude,
+                longitude: loc.coords.longitude
+            }).catch(() => {});
+        }
       }
+      fetchChefs();
     } catch (error) {
-      console.log("Erro ao obter localização:", error);
+      console.log("Erro gps", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, fetchChefs]);
 
-  // 2. (CLIENTE) Verificar meu pedido ativo
   const checkMyOrder = async (id: number) => {
     if (!id) return;
     try {
       const res = await fetch(`${API_URL}/requests/my-active-order/${id}`);
       const data = await res.json();
-      
       if (data && data.id && data.status !== 'completed') {
         setActiveOrder(data);
       } else {
         setActiveOrder(null);
       }
-    } catch { /* Erro silencioso (polling) */ }
+    } catch { }
   };
 
-  // 3. (CHEF) Buscar dados do painel
   const fetchCookData = useCallback(async () => {
     if (!user) return;
     setRefreshing(true); 
     try {
-      // A. Buscar pedidos disponíveis (Status 'pending')
       const resP = await fetch(`${API_URL}/requests`);
       const dataP = await resP.json();
       if (Array.isArray(dataP)) setOrders(dataP);
 
-      // B. Buscar pedidos que EU aceitei
       const resA = await fetch(`${API_URL}/requests/accepted-by/${user.id}`);
       const dataA = await resA.json();
       if (Array.isArray(dataA)) {
         setMyAcceptedOrders(dataA.filter((o: any) => o.status !== 'completed'));
       }
     } catch (error) {
-      console.log("Erro ao atualizar dados do chef:", error);
+      console.log("Erro chef", error);
     } finally {
       setRefreshing(false);
     }
   }, [user]);
 
-  // --- CYCLES E RADAR ---
+  // --- EFEITOS (UseEffects) ---
   
+  // 1. Carrega localização ao montar
   useEffect(() => {
-    loadLocation();
-  }, []);
+    loadLocationAndData();
+  }, [loadLocationAndData]);
 
+  // 2. Polling (Atualização automática)
   useEffect(() => {
     if (!user) return; 
+    
+    const runUpdates = () => {
+        if (user.type === 'client') {
+            checkMyOrder(user.id);
+            fetchChefs(); 
+        } else if (user.type === 'cook') {
+            fetchCookData(); 
+        }
+    };
 
-    let interval: any;
-    
-    // Se for Cliente, busca status do pedido a cada 4s
-    if (user.type === 'client') {
-      checkMyOrder(user.id); 
-      interval = setInterval(() => checkMyOrder(user.id), 4000);
-    } 
-    // Se for Chef, busca novos pedidos a cada 6s
-    else if (user.type === 'cook') {
-      fetchCookData(); 
-      interval = setInterval(fetchCookData, 6000);
-    }
-    
+    runUpdates();
+    const interval = setInterval(runUpdates, 6000); 
     return () => clearInterval(interval);
-  }, [user, fetchCookData]);
+  }, [user, fetchCookData, fetchChefs]);
 
-  // --- AÇÕES DO USUÁRIO ---
+  // --- AÇÕES ---
+  const handleRequest = () => {
+    if(!dish || !price || !user) return Alert.alert("Ops", "Preencha tudo.");
+    setModalVisible(false);
+    router.push({
+      pathname: '/payment',
+      params: {
+        dish,
+        price,
+        client_id: user.id,
+        latitude: region?.latitude || 0,
+        longitude: region?.longitude || 0
+      }
+    });
+  };
 
   const handleLogout = () => {
     Alert.alert("Sair", "Deseja desconectar?", [
@@ -146,80 +184,57 @@ export default function DashboardScreen() {
     ]);
   };
 
-  // (CLIENTE) Criar Pedido
-  const handleRequest = async () => {
-    if(!dish || !price || !user) return Alert.alert("Ops", "Preencha o prato e o valor.");
-    
-    try {
-      await fetch(`${API_URL}/requests`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          client_id: user.id, 
-          dish, 
-          price, 
-          latitude: region?.latitude || 0, 
-          longitude: region?.longitude || 0
-        })
-      });
-      setModalVisible(false); 
-      setDish(''); 
-      setPrice(''); 
-      checkMyOrder(user.id);
-      Alert.alert("Pedido Enviado!", "Aguarde, estamos buscando um Chef próximo.");
-    } catch { 
-      Alert.alert("Erro", "Falha ao enviar pedido. Verifique sua internet."); 
-    }
-  };
-
-  // (CHEF) Aceitar Pedido
+  // Funções do Chef (Aceitar/Mudar Status)
   const handleAccept = async (orderId: number) => {
     if (!user) return;
     try {
       const res = await fetch(`${API_URL}/requests/accept`, {
-        method: 'POST', 
-        headers: {'Content-Type': 'application/json'},
+        method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ request_id: orderId, cook_id: user.id })
       });
-      
-      if(res.ok) { 
-        Alert.alert("Pedido Aceito! 👨‍🍳", "Vá até o local do cliente."); 
-        fetchCookData(); 
-      } else {
-        Alert.alert("Atenção", "Este pedido já foi pego por outro chef.");
-        fetchCookData();
-      }
-    } catch { 
-      Alert.alert("Erro", "Falha ao aceitar pedido.");
-    }
+      if(res.ok) { Alert.alert("Sucesso", "Pedido Aceito!"); fetchCookData(); }
+    } catch { Alert.alert("Erro", "Falha ao aceitar."); }
   };
 
-  // (CHEF) Mudar Status (Chegou, Cozinhando, Finalizou)
   const changeStatus = async (orderId: number, newStatus: string) => {
     try {
       const res = await fetch(`${API_URL}/requests/update-status`, {
-        method: 'POST', 
-        headers: {'Content-Type': 'application/json'},
+        method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ request_id: orderId, new_status: newStatus })
       });
-      
-      if(res.ok) {
-        if(newStatus === 'completed') Alert.alert("Parabéns! 🎉", "Serviço finalizado com sucesso!");
-        fetchCookData();
-      }
-    } catch { 
-      Alert.alert("Erro", "Falha ao atualizar status."); 
-    }
+      if(res.ok) fetchCookData();
+    } catch { Alert.alert("Erro", "Falha ao atualizar."); }
   };
 
-  // --- RENDERIZAÇÃO VISUAL ---
+  // --- RENDERIZADORES ---
+  const renderChefMarker = (chef: Chef) => {
+    let color = '#2196F3'; // Azul
+    if (chef.gender === 'female') color = '#E91E63'; // Rosa
+    if (chef.is_premium) color = '#FFD700'; // Dourado
+    let iconName: any = chef.is_premium ? 'star' : 'restaurant';
+
+    return (
+      <Marker
+        key={chef.id}
+        coordinate={{ latitude: Number(chef.latitude), longitude: Number(chef.longitude) }}
+        title={chef.name}
+        description={chef.is_premium ? "⭐ Chef Premium" : "Cozinheiro(a)"}
+      >
+        <View style={[styles.markerContainer, { borderColor: color }]}>
+           <View style={[styles.markerInner, { backgroundColor: color }]}>
+              <Ionicons name={iconName} size={16} color="#FFF" />
+           </View>
+           <View style={[styles.markerArrow, { borderTopColor: color }]} />
+        </View>
+      </Marker>
+    );
+  };
 
   const renderProgressBar = (status: string) => {
     const steps = ['accepted', 'arrived', 'cooking'];
     const labels = ['A Caminho', 'Chegou', 'Cozinhando'];
     let currentIndex = steps.indexOf(status);
     if (status === 'completed') currentIndex = 3;
-
     return (
       <View style={styles.progressContainer}>
         {steps.map((step, index) => (
@@ -237,9 +252,7 @@ export default function DashboardScreen() {
   if (loading) return <ActivityIndicator size="large" color="#FF6F00" style={{flex:1}} />;
   if (!user) return <View style={{flex:1, backgroundColor:'#FFF'}} />;
 
-  // ==========================================
-  // VIEW DO CHEF 👨‍🍳
-  // ==========================================
+  // VISÃO DO CHEFE
   if (user.type === 'cook') {
     return (
       <SafeAreaView style={styles.container}>
@@ -253,51 +266,49 @@ export default function DashboardScreen() {
              <Ionicons name="log-out-outline" size={28} color="red" />
           </TouchableOpacity>
         </View>
-
+        
+        {/* LISTA DE PEDIDOS DO CHEFE */}
         <FlatList
           data={orders} 
           keyExtractor={item => item.id.toString()} 
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchCookData} colors={['#FF6F00']} />}
           ListHeaderComponent={
             <View>
-              {/* MEUS SERVIÇOS ATIVOS */}
               {myAcceptedOrders.length > 0 && (
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>🔥 Serviço Atual</Text>
                   {myAcceptedOrders.map(order => (
                     <View key={order.id} style={[styles.card, styles.cardActive]}>
-                       <View style={{flexDirection:'row', justifyContent:'space-between'}}>
-                          <Text style={styles.cardTitle}>{order.dish_description}</Text>
-                          <Text style={{fontWeight:'bold', color:'green'}}>R$ {order.offer_price}</Text>
-                       </View>
-                       <Text style={styles.cardSub}>Cliente: {order.client_name}</Text>
-                       
-                       {renderProgressBar(order.status)}
-                       
-                       <View style={styles.actionRow}>
-                         <TouchableOpacity 
-                            style={styles.btnChatSmall} 
-                            onPress={() => router.push({ pathname: '/chat', params: { orderId: order.id } })}
-                         >
-                            <Ionicons name="chatbubbles" size={20} color="#FFF"/>
-                         </TouchableOpacity>
-
-                         {order.status === 'accepted' && (
+                        <View style={{flexDirection:'row', justifyContent:'space-between'}}>
+                           <Text style={styles.cardTitle}>{order.dish_description}</Text>
+                           <Text style={{fontWeight:'bold', color:'green'}}>R$ {order.offer_price}</Text>
+                        </View>
+                        <Text style={styles.cardSub}>Cliente: {order.client_name}</Text>
+                        {renderProgressBar(order.status)}
+                        <View style={styles.actionRow}>
+                          <TouchableOpacity 
+                             style={styles.btnChatSmall} 
+                             onPress={() => router.push({ pathname: '/chat', params: { orderId: order.id } })}
+                          >
+                             <Ionicons name="chatbubbles" size={20} color="#FFF"/>
+                          </TouchableOpacity>
+                          {/* Botões de Ação do Chef */}
+                          {order.status === 'accepted' && (
                            <TouchableOpacity style={styles.btnStatus} onPress={() => changeStatus(order.id, 'arrived')}>
-                             <Text style={styles.btnText}>📍 Informar Chegada</Text>
+                              <Text style={styles.btnText}>📍 Cheguei</Text>
                            </TouchableOpacity>
-                         )}
-                         {order.status === 'arrived' && (
+                          )}
+                          {order.status === 'arrived' && (
                            <TouchableOpacity style={[styles.btnStatus, {backgroundColor:'#9C27B0'}]} onPress={() => changeStatus(order.id, 'cooking')}>
-                             <Text style={styles.btnText}>🍳 Iniciar Preparo</Text>
+                              <Text style={styles.btnText}>🍳 Cozinhar</Text>
                            </TouchableOpacity>
-                         )}
-                         {order.status === 'cooking' && (
+                          )}
+                          {order.status === 'cooking' && (
                            <TouchableOpacity style={[styles.btnStatus, {backgroundColor:'#4CAF50'}]} onPress={() => changeStatus(order.id, 'completed')}>
-                             <Text style={styles.btnText}>✅ Finalizar Serviço</Text>
+                              <Text style={styles.btnText}>✅ Finalizar</Text>
                            </TouchableOpacity>
-                         )}
-                       </View>
+                          )}
+                        </View>
                     </View>
                   ))}
                 </View>
@@ -305,7 +316,7 @@ export default function DashboardScreen() {
               <Text style={[styles.sectionTitle, {marginLeft:15, marginTop:10}]}>🔔 Pedidos Disponíveis</Text>
             </View>
           }
-          ListEmptyComponent={<Text style={styles.empty}>Nenhum pedido na região agora.</Text>}
+          ListEmptyComponent={<Text style={styles.empty}>Nenhum pedido na região.</Text>}
           renderItem={({ item }) => (
             <View style={styles.card}>
               <Text style={styles.cardTitle}>{item.dish_description}</Text>
@@ -321,22 +332,32 @@ export default function DashboardScreen() {
     );
   }
 
-  // ==========================================
-  // VIEW DO CLIENTE 🧑‍💼
-  // ==========================================
+  // VISÃO DO CLIENTE (MAPA)
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
       
-      {/* Mapa */}
-      {region && <MyMap region={region} />}
-      
-      {/* Painel Flutuante */}
+      <MapView
+        style={styles.map}
+        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+        showsUserLocation={true}
+        showsMyLocationButton={false}
+        initialRegion={region || {
+            latitude: -23.55052,
+            longitude: -46.633308,
+            latitudeDelta: 0.02,
+            longitudeDelta: 0.02,
+        }}
+      >
+        {chefs.map(chef => renderChefMarker(chef))}
+      </MapView>
+
+      {/* PAINEL FLUTUANTE */}
       <View style={styles.panel}>
         <View style={styles.row}>
           <TouchableOpacity onPress={() => router.push('/(tabs)/account')}>
             <Text style={styles.greeting}>Olá, {user.name}!</Text>
-            <Text style={styles.debug}>Alta gastronomia em casa</Text> 
+            <Text style={styles.debug}>Encontre seu chef ideal</Text> 
           </TouchableOpacity>
           <TouchableOpacity onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={28} color="red" />
@@ -344,7 +365,6 @@ export default function DashboardScreen() {
         </View>
 
         {activeOrder ? (
-          // MOSTRA SE TIVER PEDIDO
           <View style={styles.activeOrderContainer}>
             {activeOrder.status === 'pending' ? (
               <View style={styles.statusRow}>
@@ -357,27 +377,18 @@ export default function DashboardScreen() {
                    <Text style={{fontWeight:'bold', fontSize:16}}>Chef {activeOrder.cook_name}</Text>
                    <Text style={{color:'green', fontWeight:'bold'}}>R$ {activeOrder.offer_price}</Text>
                 </View>
-                
                 {renderProgressBar(activeOrder.status)}
-                
-                <Text style={{textAlign:'center', marginVertical:10, color:'#555'}}>
-                    {activeOrder.status === 'accepted' && "O Chef aceitou e está a caminho!"}
-                    {activeOrder.status === 'arrived' && "O Chef chegou na sua casa."}
-                    {activeOrder.status === 'cooking' && "O Chef está preparando seu prato."}
-                </Text>
-                
                 <TouchableOpacity 
                   style={styles.btnChat} 
                   onPress={() => router.push({ pathname: '/chat', params: { orderId: activeOrder.id } })}
                 >
                   <Ionicons name="chatbubbles" size={20} color="#FFF" style={{marginRight:5}} />
-                  <Text style={styles.btnText}>Conversar com Chef</Text>
+                  <Text style={styles.btnText}>Chat</Text>
                 </TouchableOpacity>
               </View>
             )}
           </View>
         ) : (
-          // BOTÃO DE PEDIR (SE NÃO TIVER NADA ATIVO)
           <TouchableOpacity style={styles.btnSearch} onPress={() => setModalVisible(true)}>
              <View style={styles.iconCircle}>
                 <Ionicons name="restaurant" size={24} color="#FFF" />
@@ -391,7 +402,7 @@ export default function DashboardScreen() {
         )}
       </View>
 
-      {/* MODAL (FORMULÁRIO DE PEDIDO) */}
+      {/* MODAL */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':'height'} style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -401,16 +412,14 @@ export default function DashboardScreen() {
                  <Ionicons name="close" size={24} color="#999" />
                </TouchableOpacity>
             </View>
-            
-            <Text style={styles.label}>O que você deseja comer?</Text>
+            <Text style={styles.label}>O que deseja comer?</Text>
             <TextInput 
               style={styles.input} 
-              placeholder="Ex: Risoto de Funghi, Churrasco..." 
+              placeholder="Ex: Churrasco, Risoto..." 
               value={dish} 
               onChangeText={setDish} 
             />
-            
-            <Text style={styles.label}>Quanto pretende pagar? (R$)</Text>
+            <Text style={styles.label}>Quanto quer pagar? (R$)</Text>
             <TextInput 
               style={styles.input} 
               placeholder="Ex: 150.00" 
@@ -418,9 +427,8 @@ export default function DashboardScreen() {
               value={price} 
               onChangeText={setPrice} 
             />
-            
             <TouchableOpacity style={styles.btnConfirm} onPress={handleRequest}>
-              <Text style={styles.btnText}>Solicitar Chef</Text>
+              <Text style={styles.btnText}>Ir para Pagamento</Text>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -431,43 +439,42 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFF' },
+  map: { width: width, height: height }, // Mapa ocupa tudo
+
+  // Estilos Gerais
   header: { padding: 20, paddingTop: 40, flexDirection:'row', justifyContent:'space-between', alignItems:'center', backgroundColor:'#FFF', borderBottomWidth:1, borderColor:'#EEE' },
   title: { fontSize: 24, fontWeight: 'bold', color: '#333' },
   subtitle: { color: '#666', fontSize: 14 },
-  
   debug: { fontSize:12, color:'#FF6F00', fontStyle:'italic' },
   empty: { textAlign:'center', marginTop:50, color:'#999' },
   
+  // Lista Chef
   section: { marginBottom: 20 },
   sectionTitle: { fontSize: 18, fontWeight:'bold', color:'#333', marginLeft: 15, marginBottom: 10 },
-  
-  // Card Styles
   card: { backgroundColor:'#FFF', marginHorizontal:15, marginBottom:15, padding:15, borderRadius:12, elevation:3, shadowColor:'#000', shadowOffset:{width:0, height:2}, shadowOpacity:0.1, borderWidth:1, borderColor:'#EEE' },
   cardActive: { borderColor: '#FF6F00', backgroundColor: '#FFF8E1' },
   cardTitle: { fontSize:18, fontWeight:'bold', color:'#333' },
   cardSub: { color:'#666', marginVertical:5 },
   cardPrice: { fontSize:16, fontWeight:'bold', color:'green' },
+  btnAccept: { backgroundColor:'#FF6F00', padding:12, borderRadius:8, marginTop:10, alignItems:'center' },
   
-  // Painel Flutuante (Cliente)
+  // Painel Flutuante
   panel: { position:'absolute', top:60, left:20, right:20, backgroundColor:'rgba(255,255,255,0.95)', padding:20, borderRadius:20, elevation:10, shadowColor:'#000', shadowOpacity:0.2, shadowRadius:10 },
   row: { flexDirection:'row', justifyContent:'space-between', marginBottom:15 },
   greeting: { fontSize:20, fontWeight:'bold', color:'#333' },
   
-  // Pedido Ativo Container
-  activeOrderContainer: { backgroundColor:'#F9FAFB', padding:15, borderRadius:15, borderWidth:1, borderColor:'#EEE' }, 
-  statusRow: { flexDirection:'row', alignItems:'center', marginBottom:10 },
-  
-  // Botões
-  btnAccept: { backgroundColor:'#FF6F00', padding:12, borderRadius:8, marginTop:10, alignItems:'center' },
+  // Botões de Ação
   btnChat: { backgroundColor:'#2196F3', padding:12, borderRadius:10, flexDirection:'row', justifyContent:'center', alignItems:'center', marginTop: 15 },
   btnChatSmall: { backgroundColor:'#2196F3', padding:10, borderRadius:8, justifyContent:'center', alignItems:'center', marginRight: 10 },
   btnStatus: { flex: 1, backgroundColor:'#FF6F00', padding:10, borderRadius:8, justifyContent:'center', alignItems:'center' },
   actionRow: { flexDirection: 'row', marginTop: 15 },
-  
-  // Busca
   btnSearch: { backgroundColor:'#FFF', padding:15, borderRadius:15, flexDirection:'row', alignItems:'center', borderWidth:1, borderColor:'#EEE', elevation:2 },
   iconCircle: { width:40, height:40, borderRadius:20, backgroundColor:'#FF6F00', alignItems:'center', justifyContent:'center' },
   
+  // Pedido Ativo
+  activeOrderContainer: { backgroundColor:'#F9FAFB', padding:15, borderRadius:15, borderWidth:1, borderColor:'#EEE' }, 
+  statusRow: { flexDirection:'row', alignItems:'center', marginBottom:10 },
+
   // Modal
   modalOverlay: { flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'flex-end' },
   modalContent: { backgroundColor:'#FFF', padding:25, borderTopLeftRadius:25, borderTopRightRadius:25 },
@@ -484,5 +491,10 @@ const styles = StyleSheet.create({
   stepCircle: { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 5 },
   stepActive: { backgroundColor: '#4CAF50' },
   stepInactive: { backgroundColor: '#E0E0E0' },
-  stepLabel: { fontSize: 10, color: '#666', fontWeight:'600' }
+  stepLabel: { fontSize: 10, color: '#666', fontWeight:'600' },
+
+  // Marcadores do Mapa
+  markerContainer: { alignItems: 'center', width: 40, height: 50 },
+  markerInner: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
+  markerArrow: { width: 0, height: 0, backgroundColor: 'transparent', borderStyle: 'solid', borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent', transform: [{translateY: -2}] }
 });

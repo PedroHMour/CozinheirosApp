@@ -1,66 +1,82 @@
+// app/(tabs)/options.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors, Shadows, Typography } from '../../src/constants/theme';
 
 export default function OptionsScreen() {
   const router = useRouter();
 
-  const OptionItem = ({ icon, label, dest, color = Colors.light.text }: any) => (
-    <TouchableOpacity 
-      style={styles.item} 
-      onPress={() => dest ? router.push(dest) : alert("Em breve")}
-    >
-      <View style={[styles.iconBox, { backgroundColor: color + '15' }]}>
-        <Ionicons name={icon} size={22} color={color} />
-      </View>
-      <Text style={styles.itemText}>{label}</Text>
-      <Ionicons name="chevron-forward" size={20} color="#CCC" />
-    </TouchableOpacity>
-  );
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={Typography.heading1}>Ajustes</Text>
+        {/* Usa o estilo correto do teu tema */}
+        <Text style={Typography.header}>Opções</Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20 }}>
-        <Text style={styles.sectionTitle}>Financeiro</Text>
-        <View style={styles.card}>
-          {/* LINK PARA A NOVA TELA DE PAGAMENTO */}
-          <OptionItem icon="wallet" label="Pagamento & Carteira" dest="/payment" color={Colors.light.primary} />
-          <OptionItem icon="pricetag" label="Cupons de Desconto" color={Colors.light.success} />
-        </View>
+      <View style={styles.content}>
+        <Text style={[Typography.subHeader, { marginBottom: 15 }]}>Financeiro</Text>
 
-        <Text style={styles.sectionTitle}>Aplicativo</Text>
-        <View style={styles.card}>
-          <OptionItem icon="notifications" label="Notificações" color="#FF9800" />
-          <OptionItem icon="language" label="Idioma" color="#2196F3" />
-          <OptionItem icon="moon" label="Modo Escuro" color="#673AB7" />
-        </View>
+        {/* --- BOTÃO QUE CORRIGE O PROBLEMA --- */}
+        {/* Ao clicar, ele empilha a tela de pagamento em vez de tentar renderizar na aba */}
+        <TouchableOpacity 
+          style={styles.optionButton} 
+          onPress={() => router.push('/payment')}
+        >
+          <View style={styles.iconContainer}>
+            <Ionicons name="card-outline" size={24} color={Colors.light.primary} />
+          </View>
+          <Text style={styles.optionText}>Carteira & Pagamento</Text>
+          <Ionicons name="chevron-forward" size={20} color={Colors.light.textSecondary} />
+        </TouchableOpacity>
 
-        <Text style={styles.sectionTitle}>Suporte</Text>
-        <View style={styles.card}>
-          <OptionItem icon="help-buoy" label="Central de Ajuda" />
-          <OptionItem icon="document-text" label="Termos de Uso" />
-        </View>
-      </ScrollView>
+        <Text style={[Typography.subHeader, { marginBottom: 15, marginTop: 20 }]}>Geral</Text>
+
+        {/* Botão para ir para a Conta (onde vamos colocar o botão de excluir) */}
+        <TouchableOpacity 
+          style={styles.optionButton} 
+          onPress={() => router.push('/(tabs)/account')}
+        >
+          <View style={styles.iconContainer}>
+            <Ionicons name="person-circle-outline" size={24} color={Colors.light.text} />
+          </View>
+          <Text style={styles.optionText}>Dados da Conta</Text>
+          <Ionicons name="chevron-forward" size={20} color={Colors.light.textSecondary} />
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FA' },
-  header: { padding: 20, backgroundColor: '#FFF', borderBottomWidth: 1, borderColor: '#EEE' },
-  sectionTitle: { ...Typography.heading3, marginTop: 20, marginBottom: 10, marginLeft: 5 },
-  card: { backgroundColor: '#FFF', borderRadius: 12, overflow: 'hidden', ...Shadows.small },
-  item: { 
-    flexDirection: 'row', alignItems: 'center', padding: 15, 
-    borderBottomWidth: 1, borderBottomColor: '#F5F5F5' 
+  container: { flex: 1, backgroundColor: Colors.light.background },
+  header: { 
+    padding: 20, 
+    backgroundColor: Colors.light.card, 
+    ...Shadows.soft 
   },
-  iconBox: { width: 36, height: 36, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
-  itemText: { flex: 1, fontSize: 16, color: Colors.light.text, fontWeight: '500' }
+  content: { padding: 20 },
+  optionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.card,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    ...Shadows.soft
+  },
+  iconContainer: {
+    width: 40, height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.light.background,
+    justifyContent: 'center', alignItems: 'center',
+    marginRight: 12
+  },
+  optionText: { 
+    flex: 1, 
+    fontSize: 16, 
+    fontWeight: '600', 
+    color: Colors.light.text 
+  }
 });

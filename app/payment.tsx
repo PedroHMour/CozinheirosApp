@@ -1,5 +1,6 @@
+// app/payment.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,47 +17,40 @@ import {
   View
 } from 'react-native';
 import { Colors, Shadows, Typography } from '../src/constants/theme';
-import { api } from '../src/services/api'; // <--- IMPORTANTE: Importamos a API
+import { api } from '../src/services/api';
 import { MercadoPagoService } from '../src/services/mercadopago';
 
 export default function PaymentScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams(); // Recebe dish, price, latitude, longitude, client_id
+
   const [loading, setLoading] = useState(false);
-  const [paying, setPaying] = useState(false); // Novo estado para o loading do pagamento
-  
-  // Lista de métodos
+  const [paying, setPaying] = useState(false);
+
   const [methods, setMethods] = useState<any[]>([
-    // ID 'pix' é especial, tratamos diferente
     { id: 'pix', type: 'pix', key: 'Pagamento Instantâneo', title: 'Pix' } 
   ]);
-
   const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
-  
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Estados do Formulário de Cartão
+  // Estados do Cartão
   const [cardNumber, setCardNumber] = useState('');
   const [cardName, setCardName] = useState('');
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
   const [cpf, setCpf] = useState('');
 
-  // --- FUNÇÃO 1: Adicionar Cartão (Gera Token) ---
   const handleAddCard = async () => {
     if(!cardNumber || !cardName || !expiry || !cvv || !cpf) {
         return Alert.alert("Atenção", "Preencha todos os campos.");
     }
-
     const [month, year] = expiry.split('/');
     if (!month || !year || month.length !== 2 || year.length !== 2) {
         return Alert.alert("Validade Inválida", "Use o formato MM/AA (ex: 12/28)");
     }
     const fullYear = `20${year}`;
-
     setLoading(true);
-
     try {
-        // Gera o token no Mercado Pago (Frontend)
         const token = await MercadoPagoService.createCardToken({
             cardNumber,
             cardholderName: cardName,
@@ -67,26 +61,21 @@ export default function PaymentScreen() {
             docNumber: cpf
         });
 
-        // Adiciona à lista local para o usuário selecionar
         const newCard = {
-            id: token, // O ID é o token
+            id: token,
             type: 'card',
             last4: cardNumber.slice(-4),
-            brand: 'visa', // Simplificação: num app real, detectamos a bandeira pelo bin
+            brand: 'visa',
             token: token,
-            cpf_titular: cpf, // Precisamos enviar o CPF para o backend depois
+            cpf_titular: cpf,
             nome_titular: cardName,
-            email_titular: "email@teste.com" // Idealmente vem do AuthContext
+            email_titular: "email@teste.com"
         };
-        
         setMethods([...methods, newCard]);
-        setSelectedMethod(token); // Já seleciona o novo cartão
+        setSelectedMethod(token);
         setModalVisible(false);
-        
-        // Limpa campos
         setCardNumber(''); setCardName(''); setExpiry(''); setCvv(''); setCpf('');
         Alert.alert("Sucesso", "Cartão adicionado! Selecione-o para pagar.");
-
     } catch (error: any) {
         Alert.alert("Erro ao validar cartão", error.message);
     } finally {
@@ -94,48 +83,60 @@ export default function PaymentScreen() {
     }
   };
 
-  // --- FUNÇÃO 2: Realizar Pagamento (Chama Backend) ---
+  // --- AQUI ESTÁ A MÁGICA: PAGA E DEPOIS CRIA O PEDIDO ---
   const handlePay = async () => {
       if (!selectedMethod) return;
-
       const method = methods.find(m => m.id === selectedMethod);
       if (!method) return;
 
       setPaying(true);
-
       try {
+          // 1. PROCESSA O PAGAMENTO
           if (method.type === 'pix') {
-             // Lógica de Pix (Chama /payments/pix)
              const response = await api.post('/payments/pix', {
-                 transaction_amount: 150.00, // Valor hardcoded para teste
-                 description: "Pedido Teste App",
+                 transaction_amount: Number(params.price), // Usa o preço real
+                 description: `Pedido: ${params.dish}`,
                  payer_email: "cliente@teste.com",
                  payer_first_name: "Cliente",
                  external_reference: `PEDIDO_${Math.floor(Math.random() * 1000)}`
              });
-             // Aqui você abriria uma tela com o QR Code retornado: response.qr_code
              Alert.alert("Pix Gerado!", "Copie o código: " + response.qr_code);
-
+             // Pix é assíncrono, então paramos aqui ou criamos o pedido como 'aguardando_pagamento'
+             return; 
           } else {
-             // Lógica de Cartão (Chama /payments/card)
-             // Enviamos o TOKEN e os dados para o Backend processar
+             // Cartão
              await api.post('/payments/card', {
                  token: method.token, 
-                 transaction_amount: 100.50, // Valor teste
-                 description: "Jantar Chef Local",
+                 transaction_amount: Number(params.price),
+                 description: `Pedido: ${params.dish}`,
                  installments: 1,
-                 payment_method_id: method.brand, // 'visa' ou 'master'
-                 issuer_id: "203", // Opcional ou detectado
+                 payment_method_id: method.brand,
+                 issuer_id: "203",
                  payer_email: method.email_titular,
                  payer_first_name: method.nome_titular.split(' ')[0],
                  payer_cpf: method.cpf_titular,
                  external_reference: `ORDER_${Date.now()}`
              });
-             
-             Alert.alert("Pagamento Aprovado!", "O seu pedido foi enviado para o cozinheiro.");
-             // router.push('/success');
           }
+
+          // 2. SE O PAGAMENTO PASSOU, CRIA O PEDIDO NO BANCO
+          // Isso garante que o Chef receba o pedido com os dados corretos
+          await api.post('/requests', {
+            client_id: params.client_id,
+            dish_description: params.dish,
+            offer_price: params.price,
+            latitude: params.latitude,
+            longitude: params.longitude,
+            payment_method: method.type
+          });
+
+          Alert.alert("Sucesso! 🎉", "Pagamento confirmado e Chef solicitado!");
+
+          // 3. VOLTA PARA O DASHBOARD
+          router.replace('/(tabs)/dashboard');
+
       } catch (error: any) {
+      
           console.error(error);
           Alert.alert("Falha no Pagamento", "Ocorreu um erro ao processar. Tente novamente.");
       } finally {
@@ -199,12 +200,13 @@ export default function PaymentScreen() {
           }
         />
 
-        {/* BOTÃO FLUTUANTE DE PAGAR */}
         {selectedMethod && (
             <View style={styles.footer}>
                 <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom:10}}>
                     <Text style={Typography.body}>Total a pagar:</Text>
-                    <Text style={[Typography.subHeader, {color: Colors.light.primary}]}>R$ 100,50</Text>
+                    <Text style={[Typography.subHeader, {color: Colors.light.primary}]}>
+                        R$ {Number(params.price).toFixed(2)}
+                    </Text>
                 </View>
                 <TouchableOpacity 
                     style={styles.payBtn} 
@@ -221,7 +223,6 @@ export default function PaymentScreen() {
         )}
       </View>
 
-      {/* MODAL ADICIONAR CARTÃO (IGUAL AO ANTERIOR) */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <KeyboardAvoidingView 
             behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -234,7 +235,7 @@ export default function PaymentScreen() {
                     <Ionicons name="close" size={24} color={Colors.light.textSecondary} />
                 </TouchableOpacity>
             </View>
-            
+
             <TextInput 
               style={styles.input} placeholder="Número do Cartão" keyboardType="numeric"
               value={cardNumber} onChangeText={setCardNumber} maxLength={16} placeholderTextColor="#999"
@@ -257,6 +258,7 @@ export default function PaymentScreen() {
                     value={cvv} onChangeText={setCvv} keyboardType="numeric" maxLength={4} placeholderTextColor="#999"
                 />
             </View>
+
             <TouchableOpacity 
                 style={[styles.saveBtn, loading && {opacity: 0.7}]} 
                 onPress={handleAddCard} disabled={loading}
@@ -279,7 +281,6 @@ const styles = StyleSheet.create({
   backBtn: { marginRight: 15 },
   content: { flex: 1, padding: 20 },
   sectionHeader: { marginBottom: 15, marginTop: 10 },
-  
   card: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: Colors.light.card,
@@ -288,7 +289,7 @@ const styles = StyleSheet.create({
     ...Shadows.soft
   },
   cardSelected: {
-      backgroundColor: Colors.light.primary, // Laranja quando selecionado
+      backgroundColor: Colors.light.primary, 
       borderColor: Colors.light.primary,
   },
   cardIcon: {
@@ -298,7 +299,6 @@ const styles = StyleSheet.create({
   },
   methodTitle: { fontSize: 16, fontWeight: '600', color: Colors.light.text },
   methodSub: { fontSize: 12, color: Colors.light.textSecondary, marginTop: 2 },
-
   addBtn: {
       flexDirection: 'row', alignItems: 'center', justifyContent:'center',
       padding: 15, borderWidth: 1, borderColor: Colors.light.primary,
@@ -306,7 +306,6 @@ const styles = StyleSheet.create({
       backgroundColor: 'rgba(255, 111, 0, 0.05)'
   },
   addText: { color: Colors.light.primary, fontWeight: 'bold', marginLeft: 8 },
-
   footer: {
       position: 'absolute', bottom: 20, left: 20, right: 20,
       backgroundColor: Colors.light.card, padding: 20, borderRadius: 16,
@@ -316,8 +315,6 @@ const styles = StyleSheet.create({
       backgroundColor: Colors.light.primary, padding: 16, 
       borderRadius: 12, alignItems: 'center'
   },
-
-  // Modal Styles
   modalOverlay: { flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'flex-end' },
   modalContent: { 
       backgroundColor: Colors.light.card, padding: 25, 

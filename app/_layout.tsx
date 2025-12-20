@@ -1,50 +1,56 @@
-import { Slot, useRouter, useSegments } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
-import { View, ActivityIndicator } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
+import { Tabs } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-function InitialLayout() {
-  const { user, isLoading } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
+export default function TabLayout() {
+  const insets = useSafeAreaInsets();
 
-  useEffect(() => {
-    if (isLoading) return;
-
-    const inTabsGroup = segments[0] === '(tabs)';
-
-    // Se o usuário está logado e NÃO está nas abas
-    if (user && !inTabsGroup) {
-      // CORREÇÃO: Usamos o caminho simplificado
-      router.replace('/(tabs)' as any);
-    } 
-    // Se NÃO está logado e tenta acessar as abas
-    else if (!user && inTabsGroup) {
-      router.replace('/');
-    }
-    
-  }, [user, segments, isLoading, router]);
-
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' }}>
-        <ActivityIndicator size="large" color="#FF6F00" />
-      </View>
-    );
-  }
-
-  return <Slot />;
-}
-
-export default function RootLayout() {
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <StatusBar style="dark" />
-        <InitialLayout />
-      </AuthProvider>
-    </SafeAreaProvider>
+    <Tabs screenOptions={{ 
+      headerShown: false,
+      tabBarActiveTintColor: '#FF6F00',
+      tabBarInactiveTintColor: '#999',
+      tabBarStyle: { 
+        height: 60 + insets.bottom, 
+        paddingBottom: insets.bottom + 5, 
+        paddingTop: 10,
+        backgroundColor: '#FFF',
+        borderTopWidth: 1,
+        borderColor: '#EEE',
+      },
+      tabBarLabelStyle: { fontSize: 12, fontWeight: '600', marginBottom: 5 }
+    }}>
+      {/* IMPORTANTE: O name agora é "index" porque renomeamos o arquivo.
+         Isso conecta a aba com app/(tabs)/index.tsx
+      */}
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Início',
+          tabBarIcon: ({ color }) => <Ionicons name="home" size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="activity"
+        options={{
+          title: 'Atividade',
+          tabBarIcon: ({ color }) => <Ionicons name="list" size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="options"
+        options={{
+          title: 'Opções',
+          tabBarIcon: ({ color }) => <Ionicons name="grid-outline" size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="account"
+        options={{
+          title: 'Conta',
+          tabBarIcon: ({ color }) => <Ionicons name="person" size={24} color={color} />,
+        }}
+      />
+    </Tabs>
   );
 }
