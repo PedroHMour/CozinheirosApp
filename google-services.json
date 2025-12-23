@@ -22,14 +22,6 @@
           }
         },
         {
-          "client_id": "387721210844-oabc8bfjgsk8sm58mq88136hlntia338.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.henrique.chefelocal",
-            "certificate_hash": "66c3491ec2c768361c378539ca154da01c8ee6f0"
-          }
-        },
-        {
           "client_id": "387721210844-v43kneclhqelp9lkre8pmb6ag89r280r.apps.googleusercontent.com",
           "client_type": 3
         }

@@ -1,82 +1,117 @@
-// app/(tabs)/account.tsx
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
-import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Colors, Shadows, Typography } from '../../src/constants/theme';
+import { useRouter } from 'expo-router';
+import React, { useEffect } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { api } from '../../src/services/api';
 
 export default function AccountScreen() {
+  const router = useRouter();
   const { user, signOut } = useAuth();
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      "Excluir Conta",
-      "Tem certeza absoluta? Essa ação apagará seu histórico e não pode ser desfeita.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        { 
-          text: "Sim, Excluir", 
-          style: "destructive", 
-          onPress: async () => {
-            try {
-              if (!user) return;
-              
-              // Chama a rota de delete do backend
-              await api.delete(`/users/${user.id}`);
-              
-              Alert.alert("Conta Excluída", "Seus dados foram removidos com sucesso.");
-              signOut(); // Desloga do app
-            } catch (error: any) {
-              console.error(error);
-              Alert.alert("Erro", "Não foi possível excluir a conta. Tente novamente.");
-            }
-          }
-        }
-      ]
-    );
+  // CORREÇÃO ESLINT: Adicionado 'router' nas dependências
+  useEffect(() => {
+    if (!user) {
+        router.replace('/');
+    }
+  }, [user, router]);
+
+  const handleLogout = () => {
+    Alert.alert("Sair", "Tem certeza que deseja sair?", [
+      { text: "Cancelar", style: "cancel" },
+      { 
+        text: "Sair Agora", 
+        style: 'destructive',
+        onPress: async () => {
+            await signOut();
+        } 
+      }
+    ]);
   };
+
+  if (!user) {
+    return (
+        <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#FF6F00" />
+            <Text style={{marginTop: 10, color: '#666'}}>Saindo...</Text>
+        </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFF" />
+      
       <View style={styles.header}>
-        <Text style={Typography.header}>Minha Conta</Text>
+        <Text style={styles.headerTitle}>Minha Conta</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
         
-        {/* Card de Perfil */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {user?.name?.charAt(0).toUpperCase() || "U"}
-            </Text>
+        {/* PERFIL */}
+        <View style={styles.profileHeader}>
+          <View style={styles.avatarContainer}>
+             {user.photo ? (
+                <Image source={{ uri: user.photo }} style={styles.avatar} />
+             ) : (
+                <Text style={styles.avatarText}>{user.name ? user.name.charAt(0) : 'U'}</Text>
+             )}
+             <View style={styles.editBadge}>
+               <Ionicons name="pencil" size={12} color="#FFF" />
+             </View>
           </View>
-          <View>
-            <Text style={styles.userName}>{user?.name || "Usuário"}</Text>
-            <Text style={styles.userEmail}>{user?.email || "email@teste.com"}</Text>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>
-                {user?.type === 'cook' ? 'Cozinheiro' : 'Cliente'}
-              </Text>
-            </View>
+          
+          <Text style={styles.userName}>{user.name}</Text>
+          <Text style={styles.userEmail}>{user.email}</Text>
+          
+          <View style={styles.tag}>
+             <Text style={styles.tagText}>{user.type === 'cook' ? '👨‍🍳 Cozinheiro' : '👤 Cliente VIP'}</Text>
           </View>
         </View>
 
-        <Text style={[Typography.subHeader, { marginTop: 20, marginBottom: 10 }]}>Ações</Text>
+        {/* MENUS */}
+        <View style={styles.section}>
+           <Text style={styles.sectionTitle}>Geral</Text>
+           
+           <TouchableOpacity style={styles.menuItem}>
+              <View style={styles.iconBox}><Ionicons name="receipt-outline" size={20} color="#FF6F00" /></View>
+              <Text style={styles.menuText}>Meus Pedidos</Text>
+              <Ionicons name="chevron-forward" size={20} color="#CCC" />
+           </TouchableOpacity>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
-          <Ionicons name="log-out-outline" size={20} color={Colors.light.text} />
-          <Text style={styles.logoutText}>Sair do App</Text>
-        </TouchableOpacity>
-
-        <View style={styles.dangerZone}>
-          <Text style={styles.dangerTitle}>Zona de Perigo</Text>
-          <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
-            <Ionicons name="trash-outline" size={20} color="#FFF" />
-            <Text style={styles.deleteText}>Excluir Minha Conta</Text>
-          </TouchableOpacity>
+           <TouchableOpacity style={styles.menuItem}>
+              <View style={styles.iconBox}><Ionicons name="card-outline" size={20} color="#FF6F00" /></View>
+              <Text style={styles.menuText}>Pagamentos</Text>
+              <Ionicons name="chevron-forward" size={20} color="#CCC" />
+           </TouchableOpacity>
         </View>
+
+        <View style={styles.section}>
+           <Text style={styles.sectionTitle}>Configurações</Text>
+           
+           <TouchableOpacity style={styles.menuItem}>
+              <View style={[styles.iconBox, {backgroundColor:'#E3F2FD'}]}><Ionicons name="notifications-outline" size={20} color="#2196F3" /></View>
+              <Text style={styles.menuText}>Notificações</Text>
+              <Ionicons name="chevron-forward" size={20} color="#CCC" />
+           </TouchableOpacity>
+
+           <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
+              <View style={[styles.iconBox, {backgroundColor:'#FFEBEE'}]}><Ionicons name="log-out-outline" size={20} color="#D32F2F" /></View>
+              <Text style={[styles.menuText, {color:'#D32F2F'}]}>Sair da Conta</Text>
+           </TouchableOpacity>
+        </View>
+
+        <Text style={styles.version}>Versão 1.0.0 • Chefe Local</Text>
 
       </ScrollView>
     </SafeAreaView>
@@ -84,55 +119,28 @@ export default function AccountScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.light.background },
-  header: { 
-    padding: 20, 
-    backgroundColor: Colors.light.card, 
-    ...Shadows.soft 
-  },
-  content: { padding: 20 },
+  container: { flex: 1, backgroundColor: '#FFF' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF' },
+  header: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#F0F0F0', alignItems: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  scrollContent: { paddingBottom: 40 },
   
-  profileCard: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: Colors.light.card,
-    padding: 20, borderRadius: 16,
-    ...Shadows.soft
-  },
-  avatar: {
-    width: 60, height: 60, borderRadius: 30,
-    backgroundColor: Colors.light.primaryLight,
-    justifyContent: 'center', alignItems: 'center',
-    marginRight: 15
-  },
-  avatarText: { fontSize: 24, fontWeight: 'bold', color: Colors.light.primary },
-  userName: { fontSize: 18, fontWeight: 'bold', color: Colors.light.text },
-  userEmail: { fontSize: 14, color: Colors.light.textSecondary, marginBottom: 4 },
-  badge: { 
-    backgroundColor: '#E0E0E0', paddingHorizontal: 8, 
-    paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start' 
-  },
-  badgeText: { fontSize: 10, fontWeight: 'bold', color: '#555', textTransform: 'uppercase' },
+  profileHeader: { alignItems: 'center', paddingVertical: 30 },
+  avatarContainer: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#FF6F00', justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
+  avatar: { width: 100, height: 100, borderRadius: 50 },
+  avatarText: { fontSize: 40, color: '#FFF', fontWeight: 'bold' },
+  editBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#333', width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF' },
+  userName: { fontSize: 22, fontWeight: 'bold', color: '#333' },
+  userEmail: { fontSize: 14, color: '#888', marginBottom: 10 },
+  tag: { backgroundColor: '#FFF3E0', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 15 },
+  tagText: { color: '#FF6F00', fontSize: 12, fontWeight: 'bold' },
 
-  logoutButton: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: Colors.light.card,
-    padding: 15, borderRadius: 12, marginBottom: 20,
-    borderWidth: 1, borderColor: Colors.light.border
-  },
-  logoutText: { marginLeft: 8, fontWeight: '600', color: Colors.light.text },
+  section: { paddingHorizontal: 20, marginBottom: 25 },
+  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 10 },
+  
+  menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
+  iconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#FFF3E0', justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+  menuText: { flex: 1, fontSize: 16, color: '#333', fontWeight: '500' },
 
-  dangerZone: {
-    marginTop: 10, padding: 20,
-    backgroundColor: '#FFEBEE', borderRadius: 16,
-    borderWidth: 1, borderColor: '#FFCDD2'
-  },
-  dangerTitle: { 
-    color: '#D32F2F', fontWeight: 'bold', marginBottom: 10, fontSize: 12, textTransform: 'uppercase' 
-  },
-  deleteButton: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#D32F2F',
-    padding: 15, borderRadius: 12
-  },
-  deleteText: { color: '#FFF', fontWeight: 'bold', marginLeft: 8 }
+  version: { textAlign: 'center', color: '#CCC', fontSize: 12, marginTop: 10 }
 });

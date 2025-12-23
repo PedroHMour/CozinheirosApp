@@ -21,8 +21,6 @@ export default function ActivityScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [orders, setOrders] = useState<any[]>([]);
-
-  // Para o Chef: Filtro de aba (pendente ou aceito)
   const [activeTab, setActiveTab] = useState<'pending' | 'active'>('pending');
 
   const fetchOrders = useCallback(async () => {
@@ -33,34 +31,24 @@ export default function ActivityScreen() {
       let endpoint = '';
       
       if (user.type === 'client') {
-        // Cliente vê seu pedido ativo
-        endpoint = `/requests/my-active-order/${user.id}`;
+        // Cliente vê seu histórico
+        // Nota: Endpoint simulado para histórico do cliente, se precisar
+        endpoint = `/requests/my-active-order/${user.id}`; 
       } else {
-        // CHEFE:
+        // CHEFE
         if (activeTab === 'pending') {
-           // ROTA DO MURAL: Busca TODOS os pendentes (/requests)
            endpoint = `/requests`; 
         } else {
-           // ROTA DOS MEUS: Busca os que eu já aceitei
            endpoint = `/requests/accepted-by/${user.id}`;
         }
       }
 
-      console.log(`📡 Buscando em: ${endpoint}`); // Debug
       const data = await api.get(endpoint);
       const list = Array.isArray(data) ? data : (data ? [data] : []);
-      
-      // Se for Chef na aba Pendente, garante que só mostra status 'pending'
-      // E filtra para não mostrar pedidos que já tenham sido aceitos por outros (se o backend mandar sujo)
-      if (user.type === 'cook' && activeTab === 'pending') {
-          setOrders(list.filter((o: any) => o.status === 'pending'));
-      } else {
-          setOrders(list);
-      }
+      setOrders(list);
 
     } catch (error) {
       console.log("Erro ao buscar pedidos:", error);
-      setOrders([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -73,40 +61,36 @@ export default function ActivityScreen() {
 
   const handleAcceptOrder = async (orderId: number) => {
     try {
-      console.log(`👨‍🍳 Aceitando pedido ${orderId}...`);
       await api.post('/requests/accept', { request_id: orderId, cook_id: user?.id });
-      
-      Alert.alert("Sucesso", "Pedido aceito! Vá para a aba 'Em Preparo'.");
-      setActiveTab('active'); // Muda a aba automaticamente
+      Alert.alert("Sucesso", "Pedido aceito! Veja na aba 'Meus'.");
+      setActiveTab('active');
       fetchOrders(); 
     } catch (error) {
-      console.log(error);
-      Alert.alert("Erro", "Não foi possível aceitar o pedido.");
+      Alert.alert("Erro", "Não foi possível aceitar.");
     }
   };
 
   const renderOrder = ({ item }: { item: any }) => (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
-        <Text style={styles.orderId}>Pedido #{item.id}</Text>
+        <Text style={styles.orderId}>Pedido #{item.id.toString().slice(0, 8)}</Text>
         <View style={[styles.badge, { backgroundColor: getStatusColor(item.status) }]}>
           <Text style={styles.badgeText}>{getStatusLabel(item.status)}</Text>
         </View>
       </View>
       
-      <Text style={styles.clientName}>Cliente: {item.client_name || 'Cliente'}</Text>
-      <Text style={styles.description}>{item.description}</Text>
+      {/* Exibe nome se disponível, senão genérico */}
+      <Text style={styles.description}>{item.dish_description}</Text>
       <Text style={styles.price}>R$ {Number(item.offer_price).toFixed(2)}</Text>
       
       <View style={styles.footer}>
         <Text style={styles.date}>
-            {new Date(item.created_at).toLocaleDateString()}
+            {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Hoje'}
         </Text>
         
-        {/* BOTÃO PARA O CHEFE ACEITAR (Só aparece se status for pending e aba novos) */}
         {user?.type === 'cook' && item.status === 'pending' && activeTab === 'pending' && (
             <TouchableOpacity style={styles.acceptBtn} onPress={() => handleAcceptOrder(item.id)}>
-                <Text style={styles.acceptText}>Aceitar Pedido</Text>
+                <Text style={styles.acceptText}>ACEITAR</Text>
             </TouchableOpacity>
         )}
       </View>
@@ -121,20 +105,19 @@ export default function ActivityScreen() {
         </Text>
       </View>
 
-      {/* ABAS DO CHEFE */}
       {user?.type === 'cook' && (
           <View style={styles.tabsContainer}>
               <TouchableOpacity 
                 style={[styles.tab, activeTab === 'pending' && styles.activeTab]}
                 onPress={() => setActiveTab('pending')}
               >
-                  <Text style={[styles.tabText, activeTab === 'pending' && styles.activeTabText]}>Mural (Novos)</Text>
+                  <Text style={[styles.tabText, activeTab === 'pending' && styles.activeTabText]}>Novos</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.tab, activeTab === 'active' && styles.activeTab]}
                 onPress={() => setActiveTab('active')}
               >
-                  <Text style={[styles.tabText, activeTab === 'active' && styles.activeTabText]}>Meus (Em Preparo)</Text>
+                  <Text style={[styles.tabText, activeTab === 'active' && styles.activeTabText]}>Meus</Text>
               </TouchableOpacity>
           </View>
       )}
@@ -144,17 +127,13 @@ export default function ActivityScreen() {
       ) : (
         <FlatList
           data={orders}
-          keyExtractor={(item) => item.id.toString()}
+          keyExtractor={(item) => String(item.id)}
           renderItem={renderOrder}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchOrders(); }} />}
           ListEmptyComponent={
             <View style={styles.emptyState}>
                 <Ionicons name="receipt-outline" size={60} color="#CCC" />
-                <Text style={styles.emptyText}>
-                    {user?.type === 'cook' && activeTab === 'pending' 
-                        ? 'Nenhum pedido novo disponível no app.' 
-                        : 'Lista vazia.'}
-                </Text>
+                <Text style={styles.emptyText}>Lista vazia.</Text>
             </View>
           }
           contentContainerStyle={{ padding: 20 }}
@@ -175,8 +154,8 @@ const getStatusColor = (status: string) => {
 
 const getStatusLabel = (status: string) => {
     switch(status) {
-        case 'pending': return 'Disponível';
-        case 'accepted': return 'Em Preparo';
+        case 'pending': return 'Pendente';
+        case 'accepted': return 'Aceito';
         case 'completed': return 'Finalizado';
         default: return status;
     }
@@ -185,22 +164,21 @@ const getStatusLabel = (status: string) => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.light.background },
   header: { padding: 20, backgroundColor: Colors.light.card, ...Shadows.soft },
-  tabsContainer: { flexDirection: 'row', padding: 10, backgroundColor: '#FFF' },
-  tab: { flex: 1, padding: 10, alignItems: 'center', borderBottomWidth: 2, borderColor: 'transparent' },
+  tabsContainer: { flexDirection: 'row', backgroundColor: '#FFF', borderBottomWidth:1, borderColor:'#EEE' },
+  tab: { flex: 1, padding: 15, alignItems: 'center', borderBottomWidth: 2, borderColor: 'transparent' },
   activeTab: { borderColor: Colors.light.primary },
   tabText: { fontWeight: '600', color: '#999' },
   activeTabText: { color: Colors.light.primary },
   card: { backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 15, ...Shadows.soft },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  orderId: { fontWeight: 'bold', fontSize: 16, color: '#333' },
-  clientName: { fontSize: 14, fontWeight: '600', color: '#555', marginBottom: 5 },
+  orderId: { fontWeight: 'bold', fontSize: 14, color: '#999' },
   badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   badgeText: { color: '#FFF', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase' },
-  description: { fontSize: 14, color: '#666', marginBottom: 10 },
-  price: { fontSize: 18, fontWeight: 'bold', color: Colors.light.primary },
-  footer: { marginTop: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  description: { fontSize: 16, fontWeight:'bold', color: '#333', marginBottom: 5 },
+  price: { fontSize: 18, fontWeight: 'bold', color: 'green' },
+  footer: { marginTop: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth:1, borderColor:'#F5F5F5', paddingTop:10 },
   date: { fontSize: 12, color: '#999' },
-  acceptBtn: { backgroundColor: Colors.light.primary, paddingHorizontal: 15, paddingVertical: 8, borderRadius: 8 },
+  acceptBtn: { backgroundColor: Colors.light.primary, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 8 },
   acceptText: { color: '#FFF', fontWeight: 'bold', fontSize: 12 },
   emptyState: { alignItems: 'center', marginTop: 50 },
   emptyText: { color: '#999', marginTop: 10 }
