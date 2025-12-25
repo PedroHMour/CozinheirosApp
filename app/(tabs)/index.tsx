@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Dimensions,
   FlatList,
   KeyboardAvoidingView,
@@ -16,8 +17,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
-  Animated
+  View
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -40,7 +40,7 @@ interface Chef {
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { user } = useAuth(); // Removi signOut daqui
+  const { user } = useAuth();
   const webViewRef = useRef<WebView>(null);
   const flatListRef = useRef<FlatList>(null);
 
@@ -53,7 +53,6 @@ export default function DashboardScreen() {
   const [dish, setDish] = useState('');
   const [price, setPrice] = useState('');
 
-  // --- HTML DO MAPA ---
   const generateMapHTML = (chefsList: Chef[], userLat: number, userLon: number) => `
     <!DOCTYPE html>
     <html>
@@ -116,7 +115,6 @@ export default function DashboardScreen() {
     </html>
   `;
 
-  // --- LÓGICA ---
   const fetchChefs = useCallback(async () => {
     try {
         const res = await api.get('/chefs').catch(() => []);
@@ -147,7 +145,6 @@ export default function DashboardScreen() {
   }, [fetchChefs]);
 
   useEffect(() => { loadLocationAndData(); }, [loadLocationAndData]);
-  useEffect(() => { if (!user) router.replace('/'); }, [user, router]);
 
   const handleWebViewMessage = (event: any) => {
     try {
@@ -176,7 +173,6 @@ export default function DashboardScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
       
-      {/* 1. MAPA */}
       <View style={styles.mapContainer}>
         <WebView
             ref={webViewRef}
@@ -189,7 +185,6 @@ export default function DashboardScreen() {
         />
       </View>
 
-      {/* 2. HEADER */}
       <SafeAreaView style={styles.headerContainer} pointerEvents="box-none">
           <View style={styles.searchBar}>
               <Ionicons name="search" size={20} color="#FF6F00" />
@@ -208,7 +203,6 @@ export default function DashboardScreen() {
           </View>
       </SafeAreaView>
 
-      {/* 3. BOTÃO DE PEDIDO (Agora ÚNICO botão flutuante) */}
       <View style={styles.fabContainer} pointerEvents="box-none">
          <TouchableOpacity style={styles.fabPrimary} onPress={() => setModalVisible(true)}>
             <Ionicons name="restaurant" size={24} color="#FFF" />
@@ -216,7 +210,6 @@ export default function DashboardScreen() {
          </TouchableOpacity>
       </View>
 
-      {/* 4. CARROSSEL */}
       <View style={styles.carouselWrapper} pointerEvents="box-none">
           <Animated.FlatList
             ref={flatListRef}
@@ -246,7 +239,6 @@ export default function DashboardScreen() {
           />
       </View>
 
-      {/* 5. MODAL */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':'height'} style={styles.modalOverlay}>
           <View style={styles.modalContent}>

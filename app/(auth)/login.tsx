@@ -1,23 +1,26 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Image,
-  KeyboardAvoidingView, Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput, TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    Image,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
-import { useAuth } from '../src/contexts/AuthContext';
+import { useAuth } from '../../src/contexts/AuthContext';
 
 const { height } = Dimensions.get('window');
 
 export default function LoginScreen() {
-  const { signIn, googleLogin, loading } = useAuth(); // Sem router aqui!
+  // 1. Pegamos as funções do contexto
+  const { signIn, googleLogin, loading } = useAuth();
   
   const [isRegistering, setIsRegistering] = useState(false);
   const [name, setName] = useState('');
@@ -29,9 +32,10 @@ export default function LoginScreen() {
     if (!email || !password) return Alert.alert("Erro", "Preencha email e senha");
     if (isRegistering && !name) return Alert.alert("Erro", "Preencha seu nome");
 
+    // 2. Chamamos o signIn. NÃO fazemos navegação aqui.
+    // Se der certo, o AuthContext atualiza o 'user' e o _layout.tsx (Porteiro) faz a mágica.
     const res = await signIn(email, password, isRegistering, name, type);
     
-    // Se der erro, avisamos. Se der sucesso, o _layout cuida do resto.
     if (!res.success) {
       Alert.alert("Erro", res.error || "Falha na autenticação");
     }
@@ -49,7 +53,8 @@ export default function LoginScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         
         <View style={[styles.header, isRegistering && styles.headerCompact]}>
-          <Image source={require('../assets/images/icon.png')} style={isRegistering ? styles.logoSmall : styles.logo} resizeMode="contain" />
+          {/* Ajuste o caminho da imagem se necessário, pois agora estamos dentro de (auth) */}
+          <Image source={require('../../assets/images/icon.png')} style={isRegistering ? styles.logoSmall : styles.logo} resizeMode="contain" />
           <Text style={styles.title}>Chefe Local</Text>
           {!isRegistering && <Text style={styles.subtitle}>Comida caseira, feita por vizinhos.</Text>}
         </View>
@@ -57,20 +62,28 @@ export default function LoginScreen() {
         <View style={styles.form}>
           {isRegistering && (
             <TextInput 
-              style={styles.input} placeholder="Nome Completo" placeholderTextColor="#999"
+              style={styles.input} 
+              placeholder="Nome Completo" 
+              placeholderTextColor="#999"
               value={name} onChangeText={setName} 
             />
           )}
           
           <TextInput 
-            style={styles.input} placeholder="E-mail" placeholderTextColor="#999"
-            keyboardType="email-address" autoCapitalize="none" 
+            style={styles.input} 
+            placeholder="E-mail" 
+            placeholderTextColor="#999"
+            keyboardType="email-address" 
+            autoCapitalize="none" 
             value={email} onChangeText={setEmail} 
           />
           
           <TextInput 
-            style={styles.input} placeholder="Senha" placeholderTextColor="#999"
-            secureTextEntry value={password} onChangeText={setPassword} 
+            style={styles.input} 
+            placeholder="Senha" 
+            placeholderTextColor="#999"
+            secureTextEntry 
+            value={password} onChangeText={setPassword} 
           />
 
           {isRegistering && (
@@ -107,18 +120,15 @@ export default function LoginScreen() {
 
           <TouchableOpacity style={styles.btnGoogle} onPress={handleGoogle} disabled={loading}>
             <Ionicons name="logo-google" size={20} color="#DB4437" />
-            <Text style={styles.btnGoogleText}>{isRegistering ? 'Cadastre-se com Google' : 'Entrar com Google'}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={{ alignSelf: 'center', marginTop: 15 }} 
-            onPress={() => Alert.alert("Recuperação", "Entre em contato com o suporte para redefinir sua senha.")}
-          >
-            <Text style={{ color: '#999', fontSize: 13 }}>Esqueci a senha</Text>
+            <Text style={styles.btnGoogleText}>
+              {isRegistering ? 'Cadastre-se com Google' : 'Entrar com Google'}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.switchBtn} onPress={() => setIsRegistering(!isRegistering)}>
-            <Text style={styles.switchText}>{isRegistering ? 'Já tem conta? Fazer Login' : 'Criar nova conta'}</Text>
+            <Text style={styles.switchText}>
+              {isRegistering ? 'Já tem conta? Fazer Login' : 'Criar nova conta'}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

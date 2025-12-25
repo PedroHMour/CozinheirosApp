@@ -1,9 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import { router } from 'expo-router';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { api } from '../services/api';
 
+// Configuração do Google
 GoogleSignin.configure({
   webClientId: "387721210844-v43kneclhqelp9lkre8pmb6ag89r280r.apps.googleusercontent.com", 
   offlineAccess: true,
@@ -11,7 +11,7 @@ GoogleSignin.configure({
 });
 
 interface User {
-  id: number;
+  id: number | string;
   name: string;
   email: string;
   type: 'client' | 'cook';
@@ -45,8 +45,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   async function loadStorageData() {
     try {
-      const storedUser = await AsyncStorage.getItem('@chefelocal:user');
-      const storedToken = await AsyncStorage.getItem('@chefelocal:token');
+      const [storedUser, storedToken] = await Promise.all([
+        AsyncStorage.getItem('@chefelocal:user'),
+        AsyncStorage.getItem('@chefelocal:token')
+      ]);
 
       if (storedUser) {
         const parsedUser = JSON.parse(storedUser);
@@ -63,7 +65,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }
 
   async function signIn(email: string, password: string, isRegistering: boolean, name?: string, type: string = 'client'): Promise<AuthResponse> {
-    setLoading(true);
     try {
       const endpoint = isRegistering ? '/signup' : '/login';
       const payload = isRegistering ? { email, password, name, type } : { email, password };
@@ -73,23 +74,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       if (!userData) throw new Error('Dados de usuário não retornados');
 
-      if (token) await AsyncStorage.setItem('@chefelocal:token', token);
-      
       const userToSave = { ...userData, token };
-      setUser(userToSave);
+      
+      if (token) await AsyncStorage.setItem('@chefelocal:token', token);
       await AsyncStorage.setItem('@chefelocal:user', JSON.stringify(userToSave));
+
+      setUser(userToSave);
 
       return { success: true, email: userData.email };
     } catch (error: any) {
       const msg = error.message || (error.response?.data?.error) || 'Falha na autenticação';
       return { success: false, error: msg };
-    } finally {
-      setLoading(false);
     }
   }
 
   async function googleLogin(type: string): Promise<AuthResponse> {
-    setLoading(true);
     try {
       await GoogleSignin.hasPlayServices();
       const userInfo = await GoogleSignin.signIn();
@@ -107,40 +106,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const { user: userData, token } = response;
 
         const userToSave = { ...userData, token };
-        setUser(userToSave);
+        
         await AsyncStorage.setItem('@chefelocal:user', JSON.stringify(userToSave));
         if (token) await AsyncStorage.setItem('@chefelocal:token', token);
+
+        setUser(userToSave);
 
         return { success: true, email: userData.email };
       } else {
          return { success: false, error: 'Sem token do Google' };
       }
+    // CORREÇÃO ESLINT: Removemos o '(error: any)' pois não estava a ser usado
     } catch {
-       // CORREÇÃO ESLINT: Removemos o '(error: any)'
        return { success: false, error: 'Erro Login Google' };
-    } finally {
-      setLoading(false);
     }
   }
 
   async function signOut() {
-    setLoading(true);
     try {
-      await AsyncStorage.clear();
+      await AsyncStorage.multiRemove(['@chefelocal:user', '@chefelocal:token']);
       await GoogleSignin.signOut().catch(() => {});
     } catch (e) {
       console.log("Erro ao limpar dados:", e);
     }
-
     setUser(null);
-    setLoading(false);
-
-    setTimeout(() => {
-        if (router.canGoBack()) {
-            router.dismissAll();
-        }
-        router.replace('/'); 
-    }, 100);
   }
 
   return (
