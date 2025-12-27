@@ -3,7 +3,6 @@ import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { api } from '../services/api';
 
-// Configuração do Google
 GoogleSignin.configure({
   webClientId: "387721210844-v43kneclhqelp9lkre8pmb6ag89r280r.apps.googleusercontent.com", 
   offlineAccess: true,
@@ -14,7 +13,7 @@ interface User {
   id: number | string;
   name: string;
   email: string;
-  type: 'client' | 'cook';
+  type: 'client' | 'cook' | null;
   token?: string;
   photo?: string;
 }
@@ -31,6 +30,7 @@ interface AuthContextType {
   signIn: (email: string, password: string, isRegistering: boolean, name?: string, type?: string) => Promise<AuthResponse>;
   signOut: () => Promise<void>;
   googleLogin: (type: string) => Promise<AuthResponse>;
+  updateUser: (updates: Partial<User>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -116,7 +116,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } else {
          return { success: false, error: 'Sem token do Google' };
       }
-    // CORREÇÃO ESLINT: Removemos o '(error: any)' pois não estava a ser usado
     } catch {
        return { success: false, error: 'Erro Login Google' };
     }
@@ -132,8 +131,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(null);
   }
 
+  async function updateUser(updates: Partial<User>) {
+    if (!user) return;
+    const updatedUser = { ...user, ...updates };
+    setUser(updatedUser);
+    await AsyncStorage.setItem('@chefelocal:user', JSON.stringify(updatedUser));
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut, googleLogin }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signOut, googleLogin, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,56 +1,68 @@
 // src/services/mercadopago.ts
-import { MP_PUBLIC_KEY } from '../constants/Config';
 
-interface CardData {
-  cardNumber: string;
-  cardholderName: string;
-  cardExpirationMonth: string;
-  cardExpirationYear: string;
-  securityCode: string;
-  docType: string;
-  docNumber: string;
-}
+// ✅ Importando do SEU arquivo existente
+import { supabase } from './supabase';
 
-// Exportação nomeada correta
-export const MercadoPagoService = {
-  async createCardToken(card: CardData) {
+export const mercadoPagoService = {
+
+  createPixPayment: async (paymentData: { 
+    transaction_amount: number; 
+    description: string; 
+    payer_name: string;
+    payer_email: string; // O App manda o email do usuário logado
+  }) => {
     try {
-      console.log("🔄 Criando token do cartão...");
+      console.log("🚀 [FRONTEND] Solicitando Pix ao Supabase Edge Function...");
+
+      // ⚠️ TRUQUE PARA O TESTE FUNCIONAR AGORA (SANDBOX):
+      // Como a Edge Function está usando a chave do VENDEDOR DE TESTE (...9941),
+      // o pagador OBRIGATORIAMENTE tem que ser o COMPRADOR DE TESTE (...9943).
+      // Se mandarmos seu email real agora, vai dar erro.
       
-      const response = await fetch(
-        `https://api.mercadopago.com/v1/card_tokens?public_key=${MP_PUBLIC_KEY}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            card_number: card.cardNumber.replace(/\s/g, ''),
-            cardholder: {
-              name: card.cardholderName,
-              identification: {
-                type: card.docType,
-                number: card.docNumber.replace(/\D/g, '')
-              }
-            },
-            expiration_month: parseInt(card.cardExpirationMonth),
-            expiration_year: parseInt(card.cardExpirationYear),
-            security_code: card.securityCode,
-          }),
+      const emailParaTeste = "test_user_3061309943@testuser.com"; 
+
+      // Chama a função 'create-pix' que está na nuvem
+      const { data, error } = await supabase.functions.invoke('create-pix', {
+        body: {
+          transaction_amount: paymentData.transaction_amount,
+          description: paymentData.description,
+          payer_email: emailParaTeste, // <--- Forçando o comprador de teste
+          payer_name: paymentData.payer_name
         }
-      );
+      });
 
-      const data = await response.json();
-
-      if (data.status >= 400) {
-        console.error("Erro MP:", data);
-        throw new Error(data.message || "Verifique os dados do cartão.");
+      // 1. Erro de conexão com o Supabase (Rede, URL errada, etc)
+      if (error) {
+        console.error("❌ [ERRO SUPABASE]:", error);
+        throw new Error("Falha ao conectar ao servidor de pagamentos.");
       }
 
-      return data.id; 
+      // 2. Erro retornado pela nossa função (Ex: MP recusou)
+      if (!data || !data.ok) {
+         console.error("❌ [ERRO MERCADO PAGO]:", data?.error);
+         throw new Error(data?.error || "Pagamento não autorizado pelo Mercado Pago.");
+      }
+
+      console.log("✅ [SUCESSO] Pix Gerado! ID:", data.payment.id);
+
+      // 3. Retorna os dados limpos para a tela exibir o QR Code
+      return {
+        id: data.payment.id,
+        status: data.payment.status, 
+        qr_code: data.payment.qr_code, 
+        qr_code_base64: data.payment.qr_code_base64,
+        ticket_url: data.payment.ticket_url
+      };
+
     } catch (error: any) {
-      console.error("Erro ao tokenizar:", error);
+      console.error('❌ [CATCH SERVICE]:', error);
       throw error;
     }
+  },
+
+  // Função auxiliar para verificar status (opcional)
+  checkPaymentStatus: async (paymentId: string) => {
+      // Por enquanto retorna null, focamos em gerar o QR Code primeiro
+      return null;
   }
 };

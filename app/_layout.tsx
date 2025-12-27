@@ -4,6 +4,9 @@ import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 
+// Tipo auxiliar para 'enganar' o TypeScript enquanto ele não reconhece as rotas novas
+type Href = any; 
+
 function InitialLayout() {
   const { user, loading } = useAuth();
   const segments = useSegments();
@@ -12,17 +15,40 @@ function InitialLayout() {
   useEffect(() => {
     if (loading) return;
 
-    // Verifica se estamos na pasta (auth)
-    const inAuthGroup = segments[0] === '(auth)';
+    // CORREÇÃO 1: Forçamos (segments[0] as string) para evitar erro de comparação
+    const rootSegment = segments[0] as string;
+    const inAuthGroup = rootSegment === '(auth)';
+    const inCookGroup = rootSegment === '(cook)';
+    const inClientGroup = rootSegment === '(tabs)';
 
-    if (user && inAuthGroup) {
-      // Se tem usuário e está na tela de login -> Manda para as abas
-      router.replace('/(tabs)');
-    } else if (!user && !inAuthGroup) {
-      // Se NÃO tem usuário e NÃO está na área de auth -> Manda para login
-      router.replace('/(auth)/login');
+    // 1. Usuário NÃO logado
+    if (!user) {
+        if (!inAuthGroup) router.replace('/(auth)/login' as Href);
+        return;
     }
-    // CORREÇÃO ESLINT: 'router' adicionado nas dependências abaixo
+
+    // 2. Usuário Logado, mas SEM TIPO (Intercepção)
+    if (!user.type) {
+        // CORREÇÃO 2: Verificamos segments[1] com segurança
+        const secondSegment = segments[1] as string;
+        if (secondSegment !== 'complete-profile') {
+            router.replace('/(auth)/complete-profile' as Href);
+        }
+        return;
+    }
+
+    // 3. Usuário COZINHEIRO
+    if (user.type === 'cook') {
+        if (!inCookGroup) router.replace('/(cook)' as Href); 
+        return;
+    }
+
+    // 4. Usuário CLIENTE
+    if (user.type === 'client') {
+        if (!inClientGroup) router.replace('/(tabs)' as Href); 
+        return;
+    }
+
   }, [user, loading, segments, router]);
 
   if (loading) {
