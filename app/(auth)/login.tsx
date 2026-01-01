@@ -1,25 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { useAuth } from '../../src/contexts/AuthContext';
 
 const { height } = Dimensions.get('window');
 
 export default function LoginScreen() {
-  // 1. Pegamos as funções do contexto
   const { signIn, googleLogin, loading } = useAuth();
   
   const [isRegistering, setIsRegistering] = useState(false);
@@ -32,8 +31,6 @@ export default function LoginScreen() {
     if (!email || !password) return Alert.alert("Erro", "Preencha email e senha");
     if (isRegistering && !name) return Alert.alert("Erro", "Preencha seu nome");
 
-    // 2. Chamamos o signIn. NÃO fazemos navegação aqui.
-    // Se der certo, o AuthContext atualiza o 'user' e o _layout.tsx (Porteiro) faz a mágica.
     const res = await signIn(email, password, isRegistering, name, type);
     
     if (!res.success) {
@@ -42,18 +39,41 @@ export default function LoginScreen() {
   };
 
   const handleGoogle = async () => {
-    const res = await googleLogin(type);
+    // 1. Passamos isRegistering para o contexto saber a intenção
+    const res = await googleLogin(type, isRegistering);
+    
     if (!res.success) {
       Alert.alert("Erro", res.error || "Falha no Google Login");
+      return;
+    }
+
+    // LÓGICA ANTI-BYPASS
+    // Se o usuário estava tentando CADASTRAR, mas o login retornou sucesso...
+    if (isRegistering && res.user) {
+        const returnedType = res.user.type;
+        
+        // Verifica se o tipo retornado é diferente do tipo escolhido
+        // Ex: Usuário escolheu 'cook', mas a conta já existia como 'client'
+        if (returnedType && returnedType !== type) {
+             Alert.alert(
+                "Conta Existente", 
+                `O e-mail ${res.user.email} já possui cadastro como ${returnedType === 'client' ? 'Cliente' : 'Cozinheiro'}. Realizamos seu login automaticamente.`
+            );
+        } else {
+             // Se o tipo for igual ou nulo, mas era um cadastro e não houve erro,
+             // podemos assumir que deu certo (criou novo ou logou no correto).
+             // Opcional: Se quiser avisar que logou em vez de cadastrar:
+             // Alert.alert("Atenção", "Você já possui conta. Login realizado.");
+        }
     }
   };
 
+  // ... (Restante do código de renderização permanece igual) ...
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         
         <View style={[styles.header, isRegistering && styles.headerCompact]}>
-          {/* Ajuste o caminho da imagem se necessário, pois agora estamos dentro de (auth) */}
           <Image source={require('../../assets/images/icon.png')} style={isRegistering ? styles.logoSmall : styles.logo} resizeMode="contain" />
           <Text style={styles.title}>Chefe Local</Text>
           {!isRegistering && <Text style={styles.subtitle}>Comida caseira, feita por vizinhos.</Text>}

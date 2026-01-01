@@ -16,12 +16,16 @@ interface User {
   type: 'client' | 'cook' | null;
   token?: string;
   photo?: string;
+  // Novos campos adicionados para corrigir erros de TypeScript no menu e carteira
+  cook_level?: number; 
+  pix_key?: string;
 }
 
 interface AuthResponse {
   success: boolean;
   error?: string;
   email?: string;
+  user?: User; // Adicionado para permitir verificação de tipo na tela de login
 }
 
 interface AuthContextType {
@@ -29,7 +33,8 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string, isRegistering: boolean, name?: string, type?: string) => Promise<AuthResponse>;
   signOut: () => Promise<void>;
-  googleLogin: (type: string) => Promise<AuthResponse>;
+  // Atualizado para aceitar a intenção de registro
+  googleLogin: (type: string, isRegistering?: boolean) => Promise<AuthResponse>;
   updateUser: (updates: Partial<User>) => Promise<void>;
 }
 
@@ -81,14 +86,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       setUser(userToSave);
 
-      return { success: true, email: userData.email };
+      // Retorna o user para consistência
+      return { success: true, email: userData.email, user: userToSave };
     } catch (error: any) {
       const msg = error.message || (error.response?.data?.error) || 'Falha na autenticação';
       return { success: false, error: msg };
     }
   }
 
-  async function googleLogin(type: string): Promise<AuthResponse> {
+  async function googleLogin(type: string, isRegistering: boolean = false): Promise<AuthResponse> {
     try {
       await GoogleSignin.hasPlayServices();
       const userInfo = await GoogleSignin.signIn();
@@ -99,6 +105,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           name: userInfo.data.user.name,
           photo: userInfo.data.user.photo,
           type: type,
+          isRegistering: isRegistering, // Envia a intenção para o backend
           token: userInfo.data.idToken
         };
 
@@ -112,11 +119,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         setUser(userToSave);
 
-        return { success: true, email: userData.email };
+        // Retorna o objeto user completo para validação na tela de Login
+        return { success: true, email: userData.email, user: userToSave };
       } else {
          return { success: false, error: 'Sem token do Google' };
       }
-    } catch {
+    } catch (error) {
+       console.log(error);
        return { success: false, error: 'Erro Login Google' };
     }
   }

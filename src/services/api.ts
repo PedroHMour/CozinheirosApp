@@ -1,9 +1,7 @@
-import { PLATFORM_FEE_PERCENTAGE } from '../constants/Config';
-import { mercadoPagoService } from './mercadopago';
 import { supabase } from './supabase';
 
 export const api = {
-  // --- GET (BUSCAR DADOS) ---
+  // --- GET (Mantido original) ---
   get: async (endpoint: string) => {
     
     // 1. RADAR DO CHEF
@@ -64,22 +62,26 @@ export const api = {
     return [];
   },
 
-  // --- POST (ENVIAR DADOS) ---
+  // --- POST (Aqui está a correção) ---
   post: async (endpoint: string, body: any) => {
     
-    // --- AUTENTICAÇÃO REAL (CORRIGIDA) ---
+    // LOGIN / CADASTRO / GOOGLE
     if (endpoint === '/login' || endpoint === '/signup' || endpoint === '/auth/google') {
        
-       // 1. Verifica se o usuário já existe no banco
        const { data: existingUser } = await supabase
            .from('users')
            .select('*')
            .eq('email', body.email)
            .maybeSingle();
 
-       // 2. LOGIN: Se existe, retorna os dados REAIS do banco (onde type está correto)
        if (existingUser) {
-           // Atualiza foto ou nome se vierem novos (opcional)
+           // >>> A TRAVA DE SEGURANÇA <<<
+           if (endpoint === '/signup') {
+               throw new Error("Este e-mail já possui cadastro. Faça login.");
+           }
+           // >>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+           // Atualiza dados se necessário e loga
            if (body.photo || body.name) {
                await supabase.from('users').update({ 
                    photo: body.photo || existingUser.photo,
@@ -87,16 +89,14 @@ export const api = {
                }).eq('id', existingUser.id);
            }
            
-           // RETORNA O USUÁRIO DO BANCO (com type correto: 'cook' ou 'client')
            return { user: existingUser, token: 'session_token_simulated' };
        } 
-
-       // 3. SIGNUP: Se não existe, cria um novo
        else {
+           // Cria usuário novo
            const userData = {
                name: body.name || 'Usuário',
                email: body.email,
-               type: body.type || 'client', // Só usa 'client' se for cadastro novo sem tipo
+               type: body.type || 'client',
                photo: body.photo || null,
                latitude: body.latitude || 0,
                longitude: body.longitude || 0
@@ -113,7 +113,7 @@ export const api = {
        }
     }
 
-    // 1. CRIAR CHAMADO
+    // 1. CRIAR PEDIDO
     if (endpoint === '/requests/broadcast') {
        const { data, error } = await supabase
          .from('orders')
@@ -161,61 +161,7 @@ export const api = {
         return { ok: true };
     }
 
-    // 4. CRIAR PIX
-    if (endpoint === '/payments/create') {
-        const { order_id, amount, client_email, client_name, client_id } = body;
-
-        const platformFee = parseFloat((amount * PLATFORM_FEE_PERCENTAGE).toFixed(2));
-        const chefNet = parseFloat((amount - platformFee).toFixed(2));
-
-        const mpResponse = await mercadoPagoService.createPixPayment({
-            transaction_amount: amount,
-            description: `Pedido #${order_id} - Chefe Local`,
-            payer_email: client_email,
-            payer_name: client_name
-        });
-
-        const { error } = await supabase
-            .from('payments')
-            .insert([{
-                order_id: order_id,
-                payer_id: client_id,
-                total_amount: amount,
-                platform_fee: platformFee,
-                chef_net_amount: chefNet,
-                mp_payment_id: mpResponse.id.toString(),
-                mp_status: mpResponse.status,
-                qr_code_base64: mpResponse.qr_code, 
-                ticket_url: mpResponse.ticket_url
-            }]);
-        
-        if (error) throw error;
-        return { ok: true, payment: mpResponse };
-    }
-
-    // 5. CHECAR PAGAMENTO
-    if (endpoint === '/payments/check') {
-        const { payment_id, order_id } = body;
-        
-        const status = await mercadoPagoService.getPaymentStatus(payment_id);
-        
-        if (status === 'approved') {
-            await supabase
-                .from('payments')
-                .update({ mp_status: 'approved' })
-                .eq('mp_payment_id', payment_id.toString());
-            
-            await supabase
-                .from('orders')
-                .update({ status: 'scheduled' }) 
-                .eq('id', order_id);
-            
-            return { approved: true };
-        }
-        return { approved: false, status: status };
-    }
-
-    // 6. CHAT
+    // 4. CHAT
     if (endpoint === '/chat/send') {
         const { error } = await supabase
             .from('messages')
