@@ -5,21 +5,21 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
+  FlatList,
   Modal,
-  Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
+// Certifica-te que estes ficheiros existem na pasta src
+import { PACKAGES } from '../../src/constants/packages';
+import { Colors, Shadows, Typography } from '../../src/constants/theme';
 import { useAuth } from '../../src/contexts/AuthContext';
-import { api } from '../../src/services/api';
 
+// HTML para o mapa Leaflet (gratuito e leve)
 const generateMapHTML = (lat: number, lon: number) => `
   <!DOCTYPE html>
   <html>
@@ -27,20 +27,25 @@ const generateMapHTML = (lat: number, lon: number) => `
       <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
       <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
       <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-      <style> body { margin: 0; } #map { width: 100%; height: 100vh; } </style>
+      <style> 
+        body { margin: 0; } 
+        #map { width: 100%; height: 100vh; } 
+        .custom-div-icon { background:transparent; border:none; }
+      </style>
     </head>
     <body>
       <div id="map"></div>
       <script>
         var map = L.map('map', {zoomControl: false, attributionControl: false}).setView([${lat}, ${lon}], 15);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
+        
         var icon = L.divIcon({
             className: 'custom-div-icon',
             html: "<div style='background-color:#FF6F00; width:15px; height:15px; border-radius:50%; border:2px solid white; box-shadow:0 0 5px rgba(0,0,0,0.5);'></div>",
             iconSize: [15, 15],
             iconAnchor: [7, 7]
         });
-        L.marker([${lat}, ${lon}], {icon: icon}).addTo(map).bindPopup('<b>Você está aqui</b>').openPopup();
+        L.marker([${lat}, ${lon}], {icon: icon}).addTo(map);
       </script>
     </body>
   </html>
@@ -52,134 +57,131 @@ export default function ClientHome() {
   
   const [location, setLocation] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [loading, setLoading] = useState(false);
   
+  // Estados do formulário
   const [description, setDescription] = useState('');
   const [peopleCount, setPeopleCount] = useState('');
-  const [offerPrice, setOfferPrice] = useState('');
 
+  // 1. Pega a localização ao abrir
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
+      if (status !== 'granted') {
+          Alert.alert("Permissão negada", "Precisamos da sua localização para encontrar chefs.");
+          return;
+      }
       let loc = await Location.getCurrentPositionAsync({});
       setLocation(loc.coords);
     })();
   }, []);
 
-  const handleCreateBroadcast = async () => {
-    if (!description || !offerPrice || !peopleCount) {
-        return Alert.alert("Campos Vazios", "Preencha todos os campos.");
+  // 2. Lógica de seleção do pacote
+  const handleSelectPackage = (pkg: any) => {
+    if (!description.trim()) {
+        return Alert.alert("Falta o prato", "Por favor, diga o que gostaria de comer.");
     }
-    setLoading(true);
-    try {
-        await api.post('/requests/broadcast', {
+    if (!peopleCount.trim()) {
+        return Alert.alert("Falta a quantidade", "Para quantas pessoas será o serviço?");
+    }
+
+    setModalVisible(false);
+
+    // Navega para a tela de pagamento enviando TODOS os dados necessários
+    router.push({
+        pathname: '/payment',
+        params: {
+            package_id: pkg.id,
+            price: pkg.price.toString(),
+            dish: description,
+            people: peopleCount,
             client_id: user?.id,
-            description: description,
-            people_count: parseInt(peopleCount),
-            price: parseFloat(offerPrice.replace(',', '.')),
-            latitude: location?.latitude || 0,
-            longitude: location?.longitude || 0
-        });
-        setModalVisible(false);
-        setDescription('');
-        setPeopleCount('');
-        setOfferPrice('');
-        Alert.alert("Sucesso", "Pedido enviado! Aguarde as ofertas.");
-        router.push('/(tabs)/activity'); 
-    } catch {
-        Alert.alert("Erro", "Falha ao criar chamado.");
-    } finally {
-        setLoading(false);
-    }
+            latitude: location?.latitude,
+            longitude: location?.longitude
+        }
+    });
   };
 
   if (!location) {
       return (
         <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#FF6F00" />
-            <Text style={styles.loadingText}>Localizando...</Text>
+            <Text style={{marginTop: 10, color: '#666'}}>Localizando chefs próximos...</Text>
         </View>
       );
   }
 
   return (
     <View style={styles.container}>
+      {/* Mapa de Fundo */}
       <View style={styles.mapContainer}>
-         <WebView source={{ html: generateMapHTML(location.latitude, location.longitude) }} style={{flex:1}} scrollEnabled={false} />
+         <WebView 
+            source={{ html: generateMapHTML(location.latitude, location.longitude) }} 
+            style={{flex:1}} 
+            scrollEnabled={false} 
+         />
       </View>
 
-      <SafeAreaView style={styles.headerContainer} edges={['top']}>
-          <View style={styles.searchBar}>
-              <View style={styles.dot} />
-              <Text style={styles.addressText}>Sua localização atual</Text>
-          </View>
-      </SafeAreaView>
-
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.bottomSheetWrapper}>
+      {/* Botão Inferior "Pedir um Chef" */}
+      <View style={styles.bottomSheetWrapper}>
         <View style={styles.bottomSheet}>
-           <Text style={styles.callText}>O que vamos comer hoje?</Text>
+           <Text style={Typography.subHeader}>O que vamos comer hoje?</Text>
            <TouchableOpacity style={styles.btnCall} onPress={() => setModalVisible(true)}>
-              <Text style={styles.btnCallText}>SOLICITAR UM CHEF</Text>
+              <Text style={styles.btnCallText}>PEDIR UM CHEF</Text>
            </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </View>
 
+      {/* Modal de Preenchimento e Escolha de Pacote */}
       <Modal visible={modalVisible} animationType="slide" transparent>
          <View style={styles.modalOverlay}>
-            <KeyboardAvoidingView 
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={{ width: '100%' }}
-            >
-                <View style={styles.modalContent}>
-                    <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Novo Pedido</Text>
-                            <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeBtn}>
-                                <Ionicons name="close" size={24} color="#666" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <Text style={styles.modalSubtitle}>Preencha os dados para os chefs verem.</Text>
-
-                        <Text style={styles.label}>O que você precisa?</Text>
-                        <TextInput 
-                            style={styles.input} 
-                            placeholder="Ex: Almoço, Churrasco..." 
-                            value={description}
-                            onChangeText={setDescription}
-                        />
-
-                        <View style={styles.row}>
-                            <View style={{flex: 1, marginRight: 10}}>
-                                <Text style={styles.label}>Pessoas</Text>
-                                <TextInput 
-                                    style={styles.input} 
-                                    placeholder="Ex: 4" 
-                                    keyboardType="numeric"
-                                    value={peopleCount}
-                                    onChangeText={setPeopleCount}
-                                />
-                            </View>
-                            <View style={{flex: 1}}>
-                                <Text style={styles.label}>Sua Oferta (R$)</Text>
-                                <TextInput 
-                                    style={styles.input} 
-                                    placeholder="Ex: 150.00" 
-                                    keyboardType="numeric"
-                                    value={offerPrice}
-                                    onChangeText={setOfferPrice}
-                                />
-                            </View>
-                        </View>
-
-                        <TouchableOpacity style={styles.btnConfirm} onPress={handleCreateBroadcast} disabled={loading}>
-                            {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.btnConfirmText}>ENVIAR PEDIDO</Text>}
-                        </TouchableOpacity>
-                        <View style={{height: 20}} />
-                    </ScrollView>
+            <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                    <Text style={Typography.subHeader}>Detalhes do Pedido</Text>
+                    <TouchableOpacity onPress={() => setModalVisible(false)}>
+                        <Ionicons name="close" size={24} color="#666" />
+                    </TouchableOpacity>
                 </View>
-            </KeyboardAvoidingView>
+
+                <Text style={styles.label}>O que gostaria de comer?</Text>
+                <TextInput 
+                    style={styles.input} 
+                    placeholder="Ex: Churrasco, Feijoada, Jantar Romântico..." 
+                    value={description}
+                    onChangeText={setDescription}
+                />
+
+                <Text style={styles.label}>Para quantas pessoas?</Text>
+                <TextInput 
+                    style={styles.input} 
+                    placeholder="Ex: 4" 
+                    keyboardType="numeric"
+                    value={peopleCount}
+                    onChangeText={setPeopleCount}
+                />
+
+                <Text style={[Typography.subHeader, {marginTop: 15, marginBottom: 10}]}>Escolha o Nível:</Text>
+                
+                <FlatList
+                    data={PACKAGES}
+                    keyExtractor={item => item.id}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{paddingRight: 20}}
+                    renderItem={({item}) => (
+                        <TouchableOpacity style={styles.packageCard} onPress={() => handleSelectPackage(item)}>
+                            <View style={styles.cardHeader}>
+                                <View style={styles.priceTag}>
+                                    <Text style={styles.priceText}>R$ {item.price}</Text>
+                                </View>
+                            </View>
+                            <View>
+                                <Text style={styles.pkgTitle}>{item.label}</Text>
+                                <Text style={styles.pkgDesc} numberOfLines={3}>{item.description}</Text>
+                            </View>
+                        </TouchableOpacity>
+                    )}
+                />
+            </View>
          </View>
       </Modal>
     </View>
@@ -189,26 +191,43 @@ export default function ClientHome() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFF' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 10, color: '#666' },
   mapContainer: { ...StyleSheet.absoluteFillObject },
-  headerContainer: { position: 'absolute', top: 0, left: 0, right: 0, padding: 20, alignItems: 'center' },
-  searchBar: { backgroundColor: '#FFF', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 25, flexDirection: 'row', alignItems: 'center', elevation: 5, width: '90%' },
-  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#4CAF50', marginRight: 10 },
-  addressText: { fontWeight: '600', color: '#333' },
+  
   bottomSheetWrapper: { position: 'absolute', bottom: 0, left: 0, right: 0 },
-  bottomSheet: { backgroundColor: '#FFF', padding: 25, borderTopLeftRadius: 25, borderTopRightRadius: 25, elevation: 10, paddingBottom: Platform.OS === 'ios' ? 40 : 25 },
-  callText: { fontSize: 22, fontWeight: 'bold', color: '#333', marginBottom: 15 },
-  btnCall: { backgroundColor: '#FF6F00', padding: 18, borderRadius: 12, alignItems: 'center' },
+  bottomSheet: { 
+      backgroundColor: '#FFF', padding: 25, 
+      borderTopLeftRadius: 25, borderTopRightRadius: 25, 
+      ...Shadows.float 
+  },
+  
+  btnCall: { 
+      backgroundColor: Colors.light.primary, padding: 18, 
+      borderRadius: 12, alignItems: 'center', marginTop: 15 
+  },
   btnCallText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
+  
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 25, paddingBottom: 40 }, 
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#333' },
-  modalSubtitle: { fontSize: 14, color: '#888', marginBottom: 20 },
-  closeBtn: { padding: 5 },
-  label: { fontWeight: '600', color: '#333', marginBottom: 8, marginTop: 10 },
-  input: { backgroundColor: '#F5F5F5', padding: 15, borderRadius: 10, fontSize: 16, borderWidth: 1, borderColor: '#EEE' },
-  row: { flexDirection: 'row', marginBottom: 20 },
-  btnConfirm: { backgroundColor: '#2196F3', padding: 18, borderRadius: 12, alignItems: 'center', marginTop: 10 },
-  btnConfirmText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 }
+  modalContent: { 
+      backgroundColor: '#FFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, 
+      padding: 20, height: '75%' 
+  },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  
+  label: { fontWeight: '600', color: '#333', marginBottom: 5 },
+  input: { 
+      backgroundColor: '#F5F5F5', padding: 12, borderRadius: 8, 
+      fontSize: 16, marginBottom: 15, borderWidth: 1, borderColor: '#EEE' 
+  },
+  
+  packageCard: { 
+      width: 150, height: 170, backgroundColor: '#FFF', 
+      borderRadius: 12, padding: 12, marginRight: 15, 
+      borderWidth: 1, borderColor: '#EEE', ...Shadows.soft, 
+      justifyContent: 'space-between' 
+  },
+  cardHeader: { flexDirection: 'row', justifyContent: 'flex-start' },
+  priceTag: { backgroundColor: '#E8F5E9', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 4 },
+  priceText: { color: '#2E7D32', fontWeight: 'bold', fontSize: 14 },
+  pkgTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginTop: 5 },
+  pkgDesc: { fontSize: 11, color: '#666', marginTop: 2 }
 });

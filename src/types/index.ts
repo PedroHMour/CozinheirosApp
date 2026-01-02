@@ -1,48 +1,50 @@
 // src/types/index.ts
 
-// Níveis de Cozinheiro disponíveis
 export type CookLevel = 'basic' | 'intermediate' | 'professional' | 'premium';
 
-// Definição do Usuário (Cliente ou Cozinheiro)
 export interface User {
-  id: string; 
+  id: string;
   name: string;
   email: string;
-  photo?: string; 
+  photo?: string;
   type: 'client' | 'cook';
-  
-  // NOVOS CAMPOS (Correção dos erros 2339)
-  cook_level?: CookLevel;       
-  wallet_balance?: number;      
-  pix_key?: string;             
+  cook_level?: CookLevel;
+  rating?: number;
 }
 
-// Definição dos Pacotes de Serviço (Correção do erro 2305)
 export interface ServicePackage {
   id: CookLevel;
   label: string;
   price: number;
   description: string;
-  commission: number; // 11%
+  commission: number;
 }
 
-// Definição de um Pedido
 export interface Order {
   id: number;
   client_id: string;
   cook_id?: string | null;
   
+  // Dados do Pacote
   package_level: CookLevel; 
   dish_description: string; 
   people_count: number;
   
+  // Financeiro
   total_price: number;      
   cook_profit: number;      
-  
+  platform_fee: number;
+  payment_method: string;
+
+  // Status e Local
   status: 'pending' | 'accepted' | 'preparing' | 'delivery' | 'finished';
   latitude: number;
   longitude: number;
   created_at: string;
+
+  // Relações (opcionais do Supabase)
+  client?: User;
+  cook?: User;
 }
 
 export interface ChatMessage {
